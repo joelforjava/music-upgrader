@@ -11,6 +11,15 @@ mutagen = "^1.47.0"
 python-dateutil = "^2.9.0.post0"
 
 
+[tool.poetry.group.test.dependencies]
+pytest = "^8.3.2"
+
+
+[tool.poetry.group.dev.dependencies]
+black = "^24.8.0"
+isort = "^5.13.2"
+ruff = "^0.5.7"
+
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
