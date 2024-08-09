@@ -55,11 +55,7 @@ def run(command: str) -> str:
     # TODO - make a debug
     # print("Executing command:\n {}".format(command))
     resp = subprocess.run(
-        [
-            "osascript",
-            "-e",
-            command
-        ],
+        ["osascript", "-e", command],
         capture_output=True,
     )
     if resp.stderr:
