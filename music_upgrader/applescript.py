@@ -65,7 +65,7 @@ def run(command: str) -> str:
 
 def hfs_path_to_posix_path(hfs_path: str) -> str:
     tokens = hfs_path.split(":")
-    return "/".join(tokens[1:])
+    return "/" + "/".join(tokens[1:])
 
 
 def posix_path_to_hfs_path(posix_path: str) -> str:
@@ -75,7 +75,7 @@ def posix_path_to_hfs_path(posix_path: str) -> str:
     as the drive name. May need to change once on the computer itself.
     """
     drive_name = "Macintosh HD"
-    return f"{drive_name}/{posix_path}".replace("/", ":")
+    return f"{drive_name}{posix_path}".replace("/", ":")
 
 
 if __name__ == "__main__":

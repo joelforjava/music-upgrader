@@ -2,6 +2,7 @@ import subprocess
 from pathlib import Path
 
 import mutagen
+from inflection import transliterate
 from mutagen.flac import FLAC
 from mutagen.mp3 import MP3
 from mutagen.mp4 import MP4
@@ -54,6 +55,9 @@ def is_same_track(old_file: Path | str, new_file: Path | str) -> bool:
     verification that we are currently working with two files that represent the same track
     from a given artist's album.
 
+    However, this may pose a problem given how much beets like to use non-standard keyboard
+    characters for single quote and dash, among others.
+
     Args:
         old_file (Path | str): Path to the old, presumably already in use, file.
         new_file (Path | str): Path to the new file that could potentially replace the old one.
@@ -65,11 +69,15 @@ def is_same_track(old_file: Path | str, new_file: Path | str) -> bool:
     n = mutagen.File(new_file, easy=True)
 
     # NOTE the use of the list index. If any of these items return nothing, then it'll break
-    return (
-        o.get("title")[0].lower() == n.get("title")[0].lower()
-        and o.get("album")[0].lower() == n.get("album")[0].lower()
-        and o.get("artist")[0].lower() == n.get("artist")[0].lower()
-    )
+    try:
+        is_same = (
+            transliterate(o["title"][0]).lower() == transliterate(n["title"][0]).lower()
+            and transliterate(o["album"][0]).lower() == transliterate(n["album"][0]).lower()
+            and transliterate(o["artist"][0]).lower() == transliterate(n["artist"][0]).lower()
+        )
+    except KeyError:
+        return False
+    return is_same
 
 
 def is_upgradable(old_file: Path | str, new_file: Path | str) -> bool:

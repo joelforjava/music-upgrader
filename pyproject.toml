@@ -9,10 +9,14 @@ readme = "README.md"
 python = "^3.12"
 mutagen = "^1.47.0"
 python-dateutil = "^2.9.0.post0"
+beets = "^2.0.0"
+inflection = "^0.5.1"
 
 
 [tool.poetry.group.test.dependencies]
 pytest = "^8.3.2"
+beets-yearfixer = "^0.0.5"
+pylast = "^5.3.0"
 
 
 [tool.poetry.group.dev.dependencies]
