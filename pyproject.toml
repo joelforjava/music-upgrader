@@ -11,6 +11,9 @@ mutagen = "^1.47.0"
 python-dateutil = "^2.9.0.post0"
 beets = "^2.0.0"
 inflection = "^0.5.1"
+rich = "^13.8.0"
+click = "^8.1.7"
+pyyaml = "^6.0.2"
 
 
 [tool.poetry.group.test.dependencies]
@@ -23,6 +26,9 @@ pylast = "^5.3.0"
 black = "^24.8.0"
 isort = "^5.13.2"
 ruff = "^0.5.7"
+
+[tool.poetry.scripts]
+mup = "music_upgrader.main:cli"
 
 [build-system]
 requires = ["poetry-core"]
