@@ -58,6 +58,9 @@ def is_same_track(old_file: Path | str, new_file: Path | str) -> bool:
     However, this may pose a problem given how much beets like to use non-standard keyboard
     characters for single quote and dash, among others.
 
+    This also poses a problem when Beets will normalize a name, e.g. "Song About Nuthin'" becomes
+    "Song About Nothing".
+
     Args:
         old_file (Path | str): Path to the old, presumably already in use, file.
         new_file (Path | str): Path to the new file that could potentially replace the old one.
@@ -78,6 +81,12 @@ def is_same_track(old_file: Path | str, new_file: Path | str) -> bool:
     except KeyError:
         return False
     return is_same
+
+
+def get_field_values_from_track(music_track: Path | str, fields: list):
+    o = mutagen.File(music_track, easy=True)
+    return [o[field][0] for field in fields]
+
 
 
 def is_upgradable(old_file: Path | str, new_file: Path | str) -> bool:

@@ -142,23 +142,56 @@ class CopyFilesForUpgrade:
         # assert self.output_location.exists()
 
     def process_row(self, csv_row):
-        # TODO - we need to convert FLACs to ALAC. If MP3, just copy the file from "new_file" to new location
+        """Process a row for copying the intended new file to the music library location.
 
-        # FLAC to ALAC flow
+        Copy the intended new file to the music library location. If the new file is a FLAC file,
+        it will be converted to ALAC and this converted file will be used instead.
+        """
+
+        def _convert_track():
+            track_artist = csv_row["track_artist"]
+            track_title = csv_row["track_name"]
+            track_album = csv_row["album"]
+            print(f"Upgrading... {track_title} by {track_artist} from the album {track_album}")
+            # TODO - rethink regex. If you use regex, it'll expect all of these values to be exact
+            #        so, disabled it for now. Likely will need to do a loop like for checks
+            # TODO TODO - also, converting is not copying the album art. Need to get working, otherwise
+            #             Apple Music/iTunes will lose it too!
+            self.service.convert(track_title, track_artist, track_album, use_regex=False)
+            p = new_file_path.with_suffix(".m4a")
+            # TODO - might be better to use the artist/album values from the source file itself
+            # TODO TODO - also want to copy "original_year" to the "year" field. This might need to
+            #             be done regardless of whether we are working with FLAC files.
+            return self.output_location / "FLAC" / track_artist / track_album / p.name
+
         row_cpy = csv_row.copy()
-        track_artist = csv_row["track_artist"]
-        track_title = csv_row["track_name"]
-        track_album = csv_row["album"]
         new_file_source = apl.hfs_path_to_posix_path(csv_row["new_file"])
-        print(f"Upgrading... {track_title} by {track_artist} from the album {track_album}")
-        self.service.convert(track_title, track_artist, track_album)
-        p = Path(new_file_source).with_suffix(".m4a")
-        # TODO - might be better to use the artist/album values from the source file itself
-        expected_output = self.output_location / "FLAC" / track_artist / track_album / p.name
-        print(expected_output)
-        assert expected_output.exists()
-        # TODO - Once output, copy file to new destination, e.g ~/Music
-        row_cpy["new_file"] = str(expected_output)
+        new_file_path = Path(new_file_source)
+        if new_file_path.suffix.lower() == ".flac":  # Could use Mutagen for this, but seems a bit overkill
+            file_to_copy = _convert_track()
+            if not file_to_copy.exists():
+                print(SPACING, "Could not find converted file -", str(file_to_copy))
+                # TODO - how do we handle this from a flow perspective? Should everything halt?
+                #        At the very least, should log the error in the row. Perhaps "success"?
+                raise ValueError(f"Could not find converted file - {str(file_to_copy)}")
+        else:
+            file_to_copy = new_file_path
+
+        original_track_path = Path(apl.hfs_path_to_posix_path(csv_row["location"]))
+        original_parent = original_track_path.parent
+        target_path = original_parent / file_to_copy.name
+        target_exists = False
+        if target_path.exists():
+            target_exists = True
+            backup_target = target_path.with_suffix(".bak")
+            target_path.rename(backup_target)
+            print(SPACING, "Backing up existing file")
+        print(SPACING, "Moving file", str(file_to_copy))
+        file_to_copy.rename(target_path)
+        print(SPACING, "         to", str(target_path))
+
+        row_cpy["new_file"] = str(target_path)
+        row_cpy["target_existed"] = target_exists
         return row_cpy
 
     def process_csv(self, csv_path: Path):
@@ -176,7 +209,7 @@ class CopyFilesForUpgrade:
         #     pass
         processed = self.process_csv(csv_path)
         now = datetime.now(timezone.utc)
-        out_location = Path(f"{ROOT_LOCATION}/copy_results{now.strftime(DATE_FORMAT_FOR_FILES)}.csv").expanduser()
+        out_location = Path(f"{ROOT_LOCATION}/copy_results_{now.strftime(DATE_FORMAT_FOR_FILES)}.csv").expanduser()
         write_csv(processed, out_location)
 
 
