@@ -77,5 +77,5 @@ end tell
 --set display to listToCSV(listenData, ",")
 
 -- NOTE the file must exist! Eventually set up to create file if not exists.
-set dataFile to ((path to home folder) as text) & "Code:Data:Music:libraryFiles.csv"
+set dataFile to ((path to home folder) as text) & "Code:Data:Music:Upgrader:libraryFiles.csv"
 writeDataToFile(listToCSV(listenData, ","), dataFile, true)

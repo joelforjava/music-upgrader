@@ -2,10 +2,9 @@ from pathlib import Path
 import click
 
 # from . import __version__
-# from .connect import clients
 
 from .db import ApiDataService, CliDataService
-from .processors import CopyFilesForUpgrade, UpgradeCheck, ROOT_LOCATION
+from .processors import ApplyUpgrade, CopyFilesForUpgrade, UpgradeCheck, ROOT_LOCATION
 
 
 CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help'])
@@ -37,3 +36,12 @@ def copy_files(ctx, _file):
     db_name = ctx.obj["DB_NAME"]
     u = CopyFilesForUpgrade(CliDataService(db_name))
     u.run(Path(f"{ROOT_LOCATION}/{_file}").expanduser())
+
+
+@cli.command(name="apply-updates")
+@click.option("-f", "--file", "_file", help="The file to process")
+@click.pass_context
+def replace_files(ctx, _file):
+    click.echo("Replacing files ...")
+    a = ApplyUpgrade()
+    a.run(Path(f"{ROOT_LOCATION}/{_file}").expanduser())

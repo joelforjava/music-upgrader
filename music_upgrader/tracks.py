@@ -10,6 +10,7 @@ from mutagen.mp4 import MP4
 from music_upgrader import applescript
 from music_upgrader.applescript import (
     GET_TRACK_FIELD,
+    SET_TRACK_FILE_LOCATION,
     SELECT_TRACK_BY_ID,
     SELECT_TRACK_BY_ARTIST_TRACK_NAME_ALBUM,
 )
@@ -46,6 +47,10 @@ def _get_year_alt(track_name: str, track_artist: str, track_album: str):
             track_name, track_artist, track_album, GET_TRACK_FIELD.format("year")
         )
     )
+
+
+def set_file_location(track_id: str, hfs_file_path: str):
+    return _get_data_by_id(track_id, SET_TRACK_FILE_LOCATION.format(hfs_file_path))
 
 
 def is_same_track(old_file: Path | str, new_file: Path | str) -> bool:

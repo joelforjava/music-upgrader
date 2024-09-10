@@ -1,6 +1,5 @@
 import csv
-import re
-import string
+import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -156,7 +155,7 @@ class CopyFilesForUpgrade:
             # TODO - rethink regex. If you use regex, it'll expect all of these values to be exact
             #        so, disabled it for now. Likely will need to do a loop like for checks
             # TODO TODO - also, converting is not copying the album art. Need to get working, otherwise
-            #             Apple Music/iTunes will lose it too!
+            #             Apple Music/iTunes will lose it too! - could also have something to do with beets original imports...
             self.service.convert(track_title, track_artist, track_album, use_regex=False)
             p = new_file_path.with_suffix(".m4a")
             # TODO - might be better to use the artist/album values from the source file itself
@@ -218,7 +217,39 @@ class ApplyUpgrade:
     Applies the update by calling AppleScript and telling it to replace the file
     reference with the new file, copied from the CopyFilesForUpgrade step.
     """
-    pass
+    def __init__(self):
+        pass
+
+    def process_row(self, csv_row):
+        row_cpy = csv_row.copy()
+        persistent_id = csv_row["persistent_id"]
+        new_file = apl.posix_path_to_hfs_path(csv_row["new_file"])
+        try:
+            tracks.set_file_location(persistent_id, new_file)
+        except subprocess.SubprocessError:
+            row_cpy["success"] = False
+        else:
+            row_cpy["new_file"] = new_file
+            row_cpy["success"] = True
+        return row_cpy
+
+    def process_csv(self, csv_path: Path):
+
+        data = read_csv(csv_path)
+
+        results = []
+        for row in data:
+            processed = self.process_row(row)
+            results.append(processed)
+        return results
+
+    def run(self, csv_path: Path):
+        # with Progress() as progress:
+        #     pass
+        processed = self.process_csv(csv_path)
+        now = datetime.now(timezone.utc)
+        out_location = Path(f"{ROOT_LOCATION}/apply_results_{now.strftime(DATE_FORMAT_FOR_FILES)}.csv").expanduser()
+        write_csv(processed, out_location)
 
 
 def main():
