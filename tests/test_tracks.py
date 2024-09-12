@@ -3,7 +3,7 @@ import unittest
 from music_upgrader import tracks
 
 
-class TracksTests(unittest.TestCase):
+class TracksIntegrationTests(unittest.TestCase):
     def test_mp3_is_upgradable_to_alac(self):
         _o = "/Users/joel/Music/Music/Media.localized/Music/Meat Puppets/No Strings Attached/13 Bucket Head.mp3"
         _n = "/Users/joel/Music/ForFutureUse/No Strings Attached/13 - Bucket Head.m4a"
