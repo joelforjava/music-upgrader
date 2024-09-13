@@ -4,7 +4,7 @@ import click
 # from . import __version__
 
 from .db import ApiDataService, CliDataService
-from .processors import ApplyUpgrade, CopyFilesForUpgrade, ConvertFiles, UpgradeCheck, ROOT_LOCATION
+from .processors import ApplyUpgrade, CopyFiles, ConvertFiles, UpgradeCheck, ROOT_LOCATION
 
 
 CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help'])
@@ -34,7 +34,7 @@ def check(ctx):
 def copy_files(ctx, _file):
     click.echo("Copying files ...")
     db_name = ctx.obj["DB_NAME"]
-    u = CopyFilesForUpgrade(CliDataService(db_name))
+    u = CopyFiles(CliDataService(db_name))
     u.run(Path(f"{ROOT_LOCATION}/{_file}").expanduser())
 
 

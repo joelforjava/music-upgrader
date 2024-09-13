@@ -123,7 +123,7 @@ class UpgradeCheck:
             write_csv(no_upgrade, noup_location)
 
 
-class CopyFilesForUpgrade:
+class CopyFiles:
     """
     Copy files from the 'upgrade checks' CSV new_file values.
     If the destination already exists, back up the file before copying the new file!
@@ -147,39 +147,18 @@ class CopyFilesForUpgrade:
         it will be converted to ALAC and this converted file will be used instead.
         """
 
-        def _convert_track():
-            track_artist = csv_row["track_artist"]
-            track_title = csv_row["track_name"]
-            track_album = csv_row["album"]
-            print(f"Upgrading... {track_title} by {track_artist} from the album {track_album}")
-            # TODO - rethink regex. If you use regex, it'll expect all of these values to be exact
-            #        so, disabled it for now. Likely will need to do a loop like for checks
-            # TODO TODO - also, converting is not copying the album art. Need to get working, otherwise
-            #             Apple Music/iTunes will lose it too! - could also have something to do with beets original imports...
-            self.service.convert(track_title, track_artist, track_album, use_regex=False)
-            p = new_file_path.with_suffix(".m4a")
-            # TODO - might be better to use the artist/album values from the source file itself
-            # TODO TODO - also want to copy "original_year" to the "year" field. This might need to
-            #             be done regardless of whether we are working with FLAC files.
-            return self.output_location / "FLAC" / track_artist / track_album / p.name
-
         row_cpy = csv_row.copy()
-        new_file_source = apl.hfs_path_to_posix_path(csv_row["new_file"])
-        new_file_path = Path(new_file_source)
-        if new_file_path.suffix.lower() == ".flac":  # Could use Mutagen for this, but seems a bit overkill
-            file_to_copy = _convert_track()
-            if not file_to_copy.exists():
-                print(SPACING, "Could not find converted file -", str(file_to_copy))
-                # TODO - how do we handle this from a flow perspective? Should everything halt?
-                #        At the very least, should log the error in the row. Perhaps "success"?
-                raise ValueError(f"Could not find converted file - {str(file_to_copy)}")
-        else:
-            file_to_copy = new_file_path
+        new_file_source = csv_row["new_file"]
+        file_to_copy = Path(new_file_source)
 
         original_track_path = Path(apl.hfs_path_to_posix_path(csv_row["location"]))
+        print(SPACING, f"Replacing {original_track_path} with {file_to_copy}")
         original_parent = original_track_path.parent
         target_path = original_parent / file_to_copy.name
         target_exists = False
+        if target_path.is_dir():
+            print(SPACING, f"Expected target is: {target_path}")
+            raise ValueError("Target should not be a directory!")
         if target_path.exists():
             target_exists = True
             backup_target = target_path.with_suffix(".bak")
@@ -212,6 +191,7 @@ class CopyFilesForUpgrade:
         write_csv(processed, out_location)
 
 
+
 class ConvertFiles:
     """
     Copy files from the 'upgrade checks' CSV new_file values.
@@ -232,7 +212,7 @@ class ConvertFiles:
     def process_row(self, csv_row):
         """Process a row for copying the intended new file to the music library location.
 
-        Copy the intended new file to the music library location. If the new file is a FLAC file,
+        Copy the intended new file to the staging location. If the new file is a FLAC file,
         it will be converted to ALAC and this converted file will be used instead.
         """
         track_artist = csv_row["track_artist"]
@@ -263,6 +243,9 @@ class ConvertFiles:
                 #        At the very least, should log the error in the row. Perhaps "success"?
                 raise ValueError(f"Could not find converted file - {str(file_to_copy)}")
         else:
+            # FLAC files are the only files that are converted to a different format. The others
+            # should be copied from the original directory to prevent the later process from moving
+            # the original files that belong to Beets.
             print(f"Copying... {track_title} by {track_artist} from the album {track_album}")
             new_file_name = new_file_path.name
             file_ext = new_file_name.split(".")[-1]
@@ -314,7 +297,12 @@ class ApplyUpgrade:
         row_cpy = csv_row.copy()
         persistent_id = csv_row["persistent_id"]
         new_file = apl.posix_path_to_hfs_path(csv_row["new_file"])
+        original_track_path = Path(apl.hfs_path_to_posix_path(csv_row["location"]))
+        original_track_path.unlink(missing_ok=True)
         try:
+            # TODO - delete old file prior to calling applescript! Otherwise, Apple Music/iTunes will
+            #        rename the new files in unexpected ways. Not the biggest deal, but it'll make removal
+            #        later more difficult
             tracks.set_file_location(persistent_id, new_file)
         except subprocess.SubprocessError:
             row_cpy["success"] = False
