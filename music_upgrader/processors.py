@@ -45,9 +45,28 @@ def write_csv(data, file_path: Path):
         writer.writerows(data)
 
 
-class UpgradeCheck:
+class BaseProcess:
+    def __init__(self, data_file):
+        self.data_path = Path(data_file)
 
-    def __init__(self, db: ApiDataService, enable_file_comparison=False):
+    def process_row(self, csv_row):
+        raise NotImplementedError
+
+    def process_csv(self):
+
+        data = read_csv(self.data_path)
+
+        results = []
+        for row in data:
+            processed = self.process_row(row)
+            results.append(processed)
+        return results
+
+
+class UpgradeCheck(BaseProcess):
+
+    def __init__(self, data_file, db: ApiDataService, enable_file_comparison=False):
+        super().__init__(data_file)
         self.db = db
         self.should_compare_files = enable_file_comparison
 
@@ -94,12 +113,15 @@ class UpgradeCheck:
                         row_cpy["new_file"] = apl.posix_path_to_hfs_path(new_file)
                     else:
                         print(SPACING, "cannot be upgraded")
+                row_cpy["b_id"] = found["id"]
+                row_cpy["b_original_year"] = found["original_year"]
+                row_cpy["b_year"] = found["year"]
         row_cpy["can_upgrade"] = can_upgrade
         return row_cpy
 
-    def process_csv(self, csv_path: Path):
+    def process_csv(self):
 
-        data = read_csv(csv_path)
+        data = read_csv(self.data_path)
 
         for_upgrade = []
         no_upgrade = []
@@ -111,10 +133,10 @@ class UpgradeCheck:
                 no_upgrade.append(processed)
         return for_upgrade, no_upgrade
 
-    def run(self, csv_path: Path):
+    def run(self):
         # with Progress() as progress:
         #     pass
-        processed, no_upgrade = self.process_csv(csv_path)
+        processed, no_upgrade = self.process_csv()
         now = datetime.now(timezone.utc)
         out_location = Path(f"{ROOT_LOCATION}/upgrade_checks_{now.strftime(DATE_FORMAT_FOR_FILES)}.csv").expanduser()
         write_csv(processed, out_location)
@@ -123,7 +145,7 @@ class UpgradeCheck:
             write_csv(no_upgrade, noup_location)
 
 
-class CopyFiles:
+class CopyFiles(BaseProcess):
     """
     Copy files from the 'upgrade checks' CSV new_file values.
     If the destination already exists, back up the file before copying the new file!
@@ -132,7 +154,8 @@ class CopyFiles:
     This simply copies the files over. It does not call any AppleScript!
     """
 
-    def __init__(self, service: CliDataService):
+    def __init__(self, data_file, service: CliDataService):
+        super().__init__(data_file)
         self.service = service
         with Path(self.service.config_loc).expanduser().open() as config_file:
             self.output_location = Path(
@@ -172,27 +195,18 @@ class CopyFiles:
         row_cpy["target_existed"] = target_exists
         return row_cpy
 
-    def process_csv(self, csv_path: Path):
-
-        data = read_csv(csv_path)
-
-        results = []
-        for row in data:
-            processed = self.process_row(row)
-            results.append(processed)
-        return results
-
-    def run(self, csv_path: Path):
+    def run(self):
         # with Progress() as progress:
         #     pass
-        processed = self.process_csv(csv_path)
+        processed = self.process_csv()
         now = datetime.now(timezone.utc)
-        out_location = Path(f"{ROOT_LOCATION}/copy_results_{now.strftime(DATE_FORMAT_FOR_FILES)}.csv").expanduser()
+        file_name = f"{self.data_path.stem}_results_{now.strftime(DATE_FORMAT_FOR_FILES)}.csv"
+        out_location = Path(f"{ROOT_LOCATION}/{file_name}").expanduser()
         write_csv(processed, out_location)
 
 
 
-class ConvertFiles:
+class ConvertFiles(BaseProcess):
     """
     Copy files from the 'upgrade checks' CSV new_file values.
     If the destination already exists, back up the file before copying the new file!
@@ -201,7 +215,8 @@ class ConvertFiles:
     This simply copies the files over. It does not call any AppleScript!
     """
 
-    def __init__(self, service: CliDataService):
+    def __init__(self, data_file, service: CliDataService):
+        super().__init__(data_file)
         self.service = service
         with Path(self.service.config_loc).expanduser().open() as config_file:
             self.output_location = Path(
@@ -219,12 +234,12 @@ class ConvertFiles:
         track_title = csv_row["track_name"]
         track_album = csv_row["album"]
 
+        should_copy_year_from_db = csv_row.get("copy_year", False)
+
         def _convert_track():
             print(f"Converting... {track_title} by {track_artist} from the album {track_album}")
             # TODO - rethink regex. If you use regex, it'll expect all of these values to be exact
             #        so, disabled it for now. Likely will need to do a loop like for checks
-            # TODO TODO - also, converting is not copying the album art. Need to get working, otherwise
-            #             Apple Music/iTunes will lose it too! - could also have something to do with beets original imports...
             self.service.convert(track_title, track_artist, track_album, use_regex=False)
             p = new_file_path.with_suffix(".m4a")
             # TODO - might be better to use the artist/album values from the source file itself
@@ -266,32 +281,23 @@ class ConvertFiles:
         row_cpy["new_file"] = str(file_to_copy)
         return row_cpy
 
-    def process_csv(self, csv_path: Path):
-
-        data = read_csv(csv_path)
-
-        results = []
-        for row in data:
-            processed = self.process_row(row)
-            results.append(processed)
-        return results
-
-    def run(self, csv_path: Path):
+    def run(self):
         # with Progress() as progress:
         #     pass
-        processed = self.process_csv(csv_path)
+        processed = self.process_csv()
         now = datetime.now(timezone.utc)
-        out_location = Path(f"{ROOT_LOCATION}/convert_results_{now.strftime(DATE_FORMAT_FOR_FILES)}.csv").expanduser()
+        file_name = f"{self.data_path.stem}_results_{now.strftime(DATE_FORMAT_FOR_FILES)}.csv"
+        out_location = Path(f"{ROOT_LOCATION}/{file_name}").expanduser()
         write_csv(processed, out_location)
 
 
-class ApplyUpgrade:
+class ApplyUpgrade(BaseProcess):
     """
     Applies the update by calling AppleScript and telling it to replace the file
     reference with the new file, copied from the CopyFilesForUpgrade step.
     """
-    def __init__(self):
-        pass
+    def __init__(self, data_file):
+        super().__init__(data_file)
 
     def process_row(self, csv_row):
         row_cpy = csv_row.copy()
@@ -311,29 +317,21 @@ class ApplyUpgrade:
             row_cpy["success"] = True
         return row_cpy
 
-    def process_csv(self, csv_path: Path):
-
-        data = read_csv(csv_path)
-
-        results = []
-        for row in data:
-            processed = self.process_row(row)
-            results.append(processed)
-        return results
-
-    def run(self, csv_path: Path):
+    def run(self):
         # with Progress() as progress:
         #     pass
-        processed = self.process_csv(csv_path)
+        processed = self.process_csv()
         now = datetime.now(timezone.utc)
-        out_location = Path(f"{ROOT_LOCATION}/apply_results_{now.strftime(DATE_FORMAT_FOR_FILES)}.csv").expanduser()
+        file_name = f"{self.data_path.stem}_results_{now.strftime(DATE_FORMAT_FOR_FILES)}.csv"
+        out_location = Path(f"{ROOT_LOCATION}/{file_name}").expanduser()
         write_csv(processed, out_location)
 
 
 def main():
     db = ApiDataService("physical")
-    u = UpgradeCheck(db)
-    u.run(Path(f"{ROOT_LOCATION}/libraryFiles.csv").expanduser())
+    p = Path(f"{ROOT_LOCATION}/libraryFiles.csv").expanduser()
+    u = UpgradeCheck(p, db)
+    u.run()
 
 
 if __name__ == "__main__":

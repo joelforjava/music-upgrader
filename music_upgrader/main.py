@@ -24,8 +24,9 @@ def cli(ctx, database):
 def check(ctx):
     click.echo("Checking upgrade ...")
     db_name = ctx.obj["DB_NAME"]
-    u = UpgradeCheck(ApiDataService(db_name))
-    u.run(Path(f"{ROOT_LOCATION}/libraryFiles.csv").expanduser())
+    p = Path(f"{ROOT_LOCATION}/libraryFiles.csv").expanduser()
+    u = UpgradeCheck(p, ApiDataService(db_name))
+    u.run()
 
 
 @cli.command(name="copy-files")
@@ -34,8 +35,9 @@ def check(ctx):
 def copy_files(ctx, _file):
     click.echo("Copying files ...")
     db_name = ctx.obj["DB_NAME"]
-    u = CopyFiles(CliDataService(db_name))
-    u.run(Path(f"{ROOT_LOCATION}/{_file}").expanduser())
+    p = Path(f"{ROOT_LOCATION}/{_file}").expanduser()
+    u = CopyFiles(p, CliDataService(db_name))
+    u.run()
 
 
 @cli.command(name="convert-files")
@@ -44,8 +46,9 @@ def copy_files(ctx, _file):
 def convert_files(ctx, _file):
     click.echo("Converting files ...")
     db_name = ctx.obj["DB_NAME"]
-    u = ConvertFiles(CliDataService(db_name))
-    u.run(Path(f"{ROOT_LOCATION}/{_file}").expanduser())
+    p = Path(f"{ROOT_LOCATION}/{_file}").expanduser()
+    u = ConvertFiles(p, CliDataService(db_name))
+    u.run()
 
 
 @cli.command(name="apply-updates")
@@ -53,5 +56,6 @@ def convert_files(ctx, _file):
 @click.pass_context
 def replace_files(ctx, _file):
     click.echo("Replacing files ...")
-    a = ApplyUpgrade()
-    a.run(Path(f"{ROOT_LOCATION}/{_file}").expanduser())
+    p = Path(f"{ROOT_LOCATION}/{_file}").expanduser()
+    a = ApplyUpgrade(p)
+    a.run()
