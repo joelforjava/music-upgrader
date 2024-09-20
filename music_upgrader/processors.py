@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import beets.dbcore.query
+import mutagen
 import yaml
 from dateutil.parser import ParserError, parse
 from rich.progress import Progress
@@ -116,6 +117,7 @@ class UpgradeCheck(BaseProcess):
                 row_cpy["b_id"] = found["id"]
                 row_cpy["b_original_year"] = found["original_year"]
                 row_cpy["b_year"] = found["year"]
+                row_cpy["year_action"] = "itunes_year"
         row_cpy["can_upgrade"] = can_upgrade
         return row_cpy
 
@@ -234,7 +236,6 @@ class ConvertFiles(BaseProcess):
         track_title = csv_row["track_name"]
         track_album = csv_row["album"]
 
-        should_copy_year_from_db = csv_row.get("copy_year", False)
 
         def _convert_track():
             print(f"Converting... {track_title} by {track_artist} from the album {track_album}")
@@ -277,6 +278,29 @@ class ConvertFiles(BaseProcess):
             track_path.write_bytes(new_file_path.read_bytes())
 
             file_to_copy = track_path
+
+        # Apple Music/iTunes has no concept of 'original release year', so the 'year' field
+        # must be set in order to segment tracks into particular years, decades, etc.
+
+        # Choices are: nothing, b_original_year, b_year, itunes_year
+        year_action = csv_row.get("year_action", "nothing")
+        match year_action.lower():
+            case "b_original_year":
+                new_track_year = csv_row["b_original_year"]
+            case "b_year":
+                new_track_year = csv_row["b_year"]
+            case "itunes_year":
+                new_track_year = csv_row["track_year"]
+            case _:
+                new_track_year = csv_row["track_year"]
+
+        current_year = csv_row["track_year"]
+        if current_year != new_track_year:
+            print(SPACING, f"Updating year from {current_year} to {new_track_year} as per year action: {year_action}")
+            o = mutagen.File(file_to_copy, easy=True)
+            o["year"] = new_track_year
+            o.save()
+
 
         row_cpy["new_file"] = str(file_to_copy)
         return row_cpy
