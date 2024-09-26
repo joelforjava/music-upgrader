@@ -79,6 +79,7 @@ class UpgradeCheck(BaseProcess):
         track_album = csv_row["album"]
         print(f"Checking... {track_title} by {track_artist} from the album {track_album}")
         can_upgrade = False
+        upgrade_reason = ""
         result = None
         for use_regex in False, True:
             try:
@@ -90,6 +91,7 @@ class UpgradeCheck(BaseProcess):
                 if result:
                     break
         else:
+            upgrade_reason = "NOT_FOUND"
             print(SPACING, "Track not found")
         if result:
             can_upgrade = False
@@ -102,22 +104,28 @@ class UpgradeCheck(BaseProcess):
                         can_upgrade = tracks.is_upgradable(track_location, new_file)
                         if can_upgrade:
                             print(SPACING, "is upgradable")
+                            upgrade_reason = "BETTER_QUALITY"
                             row_cpy["new_file"] = apl.posix_path_to_hfs_path(new_file)
                         else:
+                            upgrade_reason = "SAME_QUALITY"
                             print(SPACING, "cannot be upgraded")
                     else:
+                        upgrade_reason = "DO_NOT_MATCH"
                         print(SPACING, "[WARN] files do not contain the same song")
                 else:
                     can_upgrade = tracks.is_upgradable(track_location, new_file)
                     if can_upgrade:
+                        upgrade_reason = "BETTER_QUALITY"
                         print(SPACING, "is upgradable")
                         row_cpy["new_file"] = apl.posix_path_to_hfs_path(new_file)
                     else:
+                        upgrade_reason = "SAME_QUALITY"
                         print(SPACING, "cannot be upgraded")
                 row_cpy["b_id"] = found["id"]
                 row_cpy["b_original_year"] = found["original_year"]
                 row_cpy["b_year"] = found["year"]
                 row_cpy["year_action"] = "itunes_year"
+        row_cpy["upgrade_reason"] = upgrade_reason
         row_cpy["can_upgrade"] = can_upgrade
         return row_cpy
 
@@ -298,7 +306,9 @@ class ConvertFiles(BaseProcess):
         if current_year != new_track_year:
             print(SPACING, f"Updating year from {current_year} to {new_track_year} as per year action: {year_action}")
             o = mutagen.File(file_to_copy, easy=True)
-            o["year"] = new_track_year
+            # This could result in a loss of fidelity since this replaces a potential full date, e.g. 1999-01-01
+            # with just a year value. 
+            o["date"] = new_track_year
             o.save()
 
 

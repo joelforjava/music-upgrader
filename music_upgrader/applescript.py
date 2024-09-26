@@ -50,6 +50,12 @@ SET_TRACK_PLAYED_COUNT = """
     end tell
 """
 
+SET_TRACK_YEAR = """
+    tell application "Music" to tell t
+        set year to {}
+    end tell
+"""
+
 
 def run(command: str) -> str:
     # TODO - make a debug
