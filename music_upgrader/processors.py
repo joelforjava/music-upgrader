@@ -63,6 +63,15 @@ class BaseProcess:
             results.append(processed)
         return results
 
+    def run(self):
+        # with Progress() as progress:
+        #     pass
+        processed = self.process_csv()
+        now = datetime.now(timezone.utc)
+        file_name = f"{self.data_path.stem}_results_{now.strftime(DATE_FORMAT_FOR_FILES)}.csv"
+        out_location = Path(f"{ROOT_LOCATION}/{file_name}").expanduser()
+        write_csv(processed, out_location)
+
 
 class UpgradeCheck(BaseProcess):
 
@@ -205,16 +214,6 @@ class CopyFiles(BaseProcess):
         row_cpy["target_existed"] = target_exists
         return row_cpy
 
-    def run(self):
-        # with Progress() as progress:
-        #     pass
-        processed = self.process_csv()
-        now = datetime.now(timezone.utc)
-        file_name = f"{self.data_path.stem}_results_{now.strftime(DATE_FORMAT_FOR_FILES)}.csv"
-        out_location = Path(f"{ROOT_LOCATION}/{file_name}").expanduser()
-        write_csv(processed, out_location)
-
-
 
 class ConvertFiles(BaseProcess):
     """
@@ -307,22 +306,13 @@ class ConvertFiles(BaseProcess):
             print(SPACING, f"Updating year from {current_year} to {new_track_year} as per year action: {year_action}")
             o = mutagen.File(file_to_copy, easy=True)
             # This could result in a loss of fidelity since this replaces a potential full date, e.g. 1999-01-01
-            # with just a year value. 
+            # with just a year value.
             o["date"] = new_track_year
             o.save()
 
 
         row_cpy["new_file"] = str(file_to_copy)
         return row_cpy
-
-    def run(self):
-        # with Progress() as progress:
-        #     pass
-        processed = self.process_csv()
-        now = datetime.now(timezone.utc)
-        file_name = f"{self.data_path.stem}_results_{now.strftime(DATE_FORMAT_FOR_FILES)}.csv"
-        out_location = Path(f"{ROOT_LOCATION}/{file_name}").expanduser()
-        write_csv(processed, out_location)
 
 
 class ApplyUpgrade(BaseProcess):
@@ -350,15 +340,6 @@ class ApplyUpgrade(BaseProcess):
             row_cpy["new_file"] = new_file
             row_cpy["success"] = True
         return row_cpy
-
-    def run(self):
-        # with Progress() as progress:
-        #     pass
-        processed = self.process_csv()
-        now = datetime.now(timezone.utc)
-        file_name = f"{self.data_path.stem}_results_{now.strftime(DATE_FORMAT_FOR_FILES)}.csv"
-        out_location = Path(f"{ROOT_LOCATION}/{file_name}").expanduser()
-        write_csv(processed, out_location)
 
 
 def main():
