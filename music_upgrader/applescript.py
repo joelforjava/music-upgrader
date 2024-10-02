@@ -1,7 +1,9 @@
 import subprocess
+from pathlib import Path
 
-
-LOAD_ALL_PLAY_COUNTS = 'tell application "Music" to get {persistent ID, played count} of every track in playlist 1'
+LOAD_ALL_PLAY_COUNTS = (
+    'tell application "Music" to get {persistent ID, played count} of every track in playlist 1'
+)
 
 
 SELECT_TRACK_BY_ID = """
@@ -67,6 +69,20 @@ def run(command: str) -> str:
     if resp.stderr:
         print(resp.stderr.decode("utf-8"))
     return resp.stdout.decode()
+
+
+def run_script(script_path: Path):
+    # TODO - make a debug
+    # print("Executing script:\n {}".format(script_path))
+    resp = subprocess.run(
+        ["osascript", str(script_path)],
+        stdout=subprocess.DEVNULL,
+    )
+    if resp.returncode != 0:
+        print(f"Unable to run AppleScript at {script_path}")  # TODO - add logging
+        print(resp)
+        return False
+    return True
 
 
 def hfs_path_to_posix_path(hfs_path: str) -> str:

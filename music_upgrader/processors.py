@@ -14,11 +14,16 @@ from . import tracks
 from .db import ApiDataService, CliDataService
 
 ROOT_LOCATION = "~/Code/Data/Music/Upgrader"
+"""Root location of the data files used for processing"""
 
+MODULE_PATH = (Path(__file__) / "..").resolve()
+"""The root path of the module"""
 
 DATE_FORMAT_FOR_FILES = "%Y%m%dT%H%M%SZ"
+"""Date format to use when saving files"""
 
-SPACING = " "*len("Checking...")
+SPACING = " " * len("Checking...")
+"""Spacing used to format output"""
 
 
 def read_csv(file_path: Path):
@@ -44,6 +49,24 @@ def write_csv(data, file_path: Path):
         writer = csv.DictWriter(csv_file, fieldnames=data[0].keys())
         writer.writeheader()
         writer.writerows(data)
+
+
+class LoadLatestLibrary:
+    def __init__(self, script_path: Path, data_path: Path):
+        self.script_path = script_path
+        self.data_path = data_path
+
+    def run(self):
+        if self.data_path.exists():
+            print("Backing up previous data file...")
+            now = datetime.now(timezone.utc)
+            self.data_path.rename(
+                self.data_path.with_stem(
+                    f"{self.data_path.stem}_{now.strftime(DATE_FORMAT_FOR_FILES)}"
+                )
+            )
+
+        apl.run_script(self.script_path)
 
 
 class BaseProcess:
@@ -81,7 +104,6 @@ class UpgradeCheck(BaseProcess):
         self.should_compare_files = enable_file_comparison
 
     def process_row(self, csv_row):
-        # TODO - verify field names
         row_cpy = csv_row.copy()
         track_artist = csv_row["track_artist"]
         track_title = csv_row["track_name"]
@@ -92,7 +114,9 @@ class UpgradeCheck(BaseProcess):
         result = None
         for use_regex in False, True:
             try:
-                result = self.db.find_track(track_title, track_artist, track_album, use_regex=use_regex)
+                result = self.db.find_track(
+                    track_title, track_artist, track_album, use_regex=use_regex
+                )
             except beets.dbcore.query.InvalidQueryError as e:
                 # print(e)
                 continue
@@ -157,9 +181,13 @@ class UpgradeCheck(BaseProcess):
         #     pass
         processed, no_upgrade = self.process_csv()
         now = datetime.now(timezone.utc)
-        out_location = Path(f"{ROOT_LOCATION}/upgrade_checks_{now.strftime(DATE_FORMAT_FOR_FILES)}.csv").expanduser()
+        out_location = Path(
+            f"{ROOT_LOCATION}/upgrade_checks_{now.strftime(DATE_FORMAT_FOR_FILES)}.csv"
+        ).expanduser()
         write_csv(processed, out_location)
-        noup_location = Path(f"{ROOT_LOCATION}/no_upgrade_{now.strftime(DATE_FORMAT_FOR_FILES)}.csv").expanduser()
+        noup_location = Path(
+            f"{ROOT_LOCATION}/no_upgrade_{now.strftime(DATE_FORMAT_FOR_FILES)}.csv"
+        ).expanduser()
         if no_upgrade:
             write_csv(no_upgrade, noup_location)
 
@@ -243,7 +271,6 @@ class ConvertFiles(BaseProcess):
         track_title = csv_row["track_name"]
         track_album = csv_row["album"]
 
-
         def _convert_track():
             print(f"Converting... {track_title} by {track_artist} from the album {track_album}")
             # TODO - rethink regex. If you use regex, it'll expect all of these values to be exact
@@ -258,7 +285,9 @@ class ConvertFiles(BaseProcess):
         row_cpy = csv_row.copy()
         new_file_source = apl.hfs_path_to_posix_path(csv_row["new_file"])
         new_file_path = Path(new_file_source)
-        if new_file_path.suffix.lower() == ".flac":  # Could use Mutagen for this, but seems a bit overkill
+        if (
+            new_file_path.suffix.lower() == ".flac"
+        ):  # Could use Mutagen for this, but seems a bit overkill
             file_to_copy = _convert_track()
             if not file_to_copy.exists():
                 print(SPACING, "Could not find converted file -", str(file_to_copy))
@@ -303,13 +332,15 @@ class ConvertFiles(BaseProcess):
 
         current_year = csv_row["track_year"]
         if current_year != new_track_year:
-            print(SPACING, f"Updating year from {current_year} to {new_track_year} as per year action: {year_action}")
+            print(
+                SPACING,
+                f"Updating year from {current_year} to {new_track_year} as per year action: {year_action}",
+            )
             o = mutagen.File(file_to_copy, easy=True)
             # This could result in a loss of fidelity since this replaces a potential full date, e.g. 1999-01-01
             # with just a year value.
             o["date"] = new_track_year
             o.save()
-
 
         row_cpy["new_file"] = str(file_to_copy)
         return row_cpy
@@ -320,6 +351,7 @@ class ApplyUpgrade(BaseProcess):
     Applies the update by calling AppleScript and telling it to replace the file
     reference with the new file, copied from the CopyFilesForUpgrade step.
     """
+
     def __init__(self, data_file):
         super().__init__(data_file)
 

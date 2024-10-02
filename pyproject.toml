@@ -30,6 +30,17 @@ ruff = "^0.5.7"
 [tool.poetry.scripts]
 mup = "music_upgrader.main:cli"
 
+[tool.black]
+line-length = 96
+target-version = ["py312"]
+
+[tool.isort]
+profile = "black"
+
+[tool.ruff]
+line-length = 96
+target-version = "py312"
+
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"

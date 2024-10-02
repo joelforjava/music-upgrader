@@ -32,5 +32,5 @@ class TracksIntegrationTests(unittest.TestCase):
         self.assertTrue(tracks.is_same_track(_o, _n))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

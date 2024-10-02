@@ -1,22 +1,46 @@
 from pathlib import Path
+
 import click
+
+from .db import ApiDataService, CliDataService
+from .processors import (
+    MODULE_PATH,
+    ROOT_LOCATION,
+    ApplyUpgrade,
+    ConvertFiles,
+    CopyFiles,
+    LoadLatestLibrary,
+    UpgradeCheck,
+)
 
 # from . import __version__
 
-from .db import ApiDataService, CliDataService
-from .processors import ApplyUpgrade, CopyFiles, ConvertFiles, UpgradeCheck, ROOT_LOCATION
 
-
-CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help'])
+CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
 
 
 @click.group(help="Tool to manage stuff", context_settings=CONTEXT_SETTINGS)
 # @click.version_option(__version__)
-@click.option("-d", "--database", help="The database to use for upgrade checks", default="physical")
+@click.option(
+    "-d",
+    "--database",
+    help="The database to use for upgrade checks",
+    default="physical",
+)
 @click.pass_context
 def cli(ctx, database):
     ctx.ensure_object(dict)
     ctx.obj["DB_NAME"] = database
+
+
+@cli.command(name="load-itunes")
+@click.pass_context
+def load(ctx):
+    click.echo("Loading latest library data...")
+    sp = MODULE_PATH / ".." / "scripts" / "load_all.applescript"
+    dp = Path(f"{ROOT_LOCATION}/libraryFiles.csv").expanduser()
+    l = LoadLatestLibrary(sp, dp)
+    l.run()
 
 
 @cli.command(name="check-upgrade")

@@ -10,9 +10,9 @@ from mutagen.mp4 import MP4
 from music_upgrader import applescript
 from music_upgrader.applescript import (
     GET_TRACK_FIELD,
-    SET_TRACK_FILE_LOCATION,
-    SELECT_TRACK_BY_ID,
     SELECT_TRACK_BY_ARTIST_TRACK_NAME_ALBUM,
+    SELECT_TRACK_BY_ID,
+    SET_TRACK_FILE_LOCATION,
 )
 
 
@@ -91,7 +91,6 @@ def is_same_track(old_file: Path | str, new_file: Path | str) -> bool:
 def get_field_values_from_track(music_track: Path | str, fields: list):
     o = mutagen.File(music_track, easy=True)
     return [o[field][0] for field in fields]
-
 
 
 def is_upgradable(old_file: Path | str, new_file: Path | str) -> bool:

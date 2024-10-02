@@ -1,11 +1,12 @@
 import re
 import string
 import subprocess
+
 from beets.dbcore import AndQuery
 from beets.dbcore.query import RegexpQuery
-from beets.library import Library, Item
+from beets.library import Item, Library
 
-REGEX_REPL = re.compile('[%s]' % re.escape(string.punctuation))
+REGEX_REPL = re.compile("[%s]" % re.escape(string.punctuation))
 
 DBS = {
     "physical": {
@@ -16,7 +17,7 @@ DBS = {
             ("singleton", "$format/Non-Album/$artist/$title"),
             ("comp", "$format/Compilations/$album%aunique{}/$track - $title"),
             ("albumtype:soundtrack", "$format/Soundtracks/$album/$track $title}"),
-        )
+        ),
     },
     "test": {
         "path": "/Users/joel/Music/Beets/main/musiclibrary.db",
@@ -26,23 +27,19 @@ DBS = {
             ("singleton", "$format/Non-Album/$artist/$title"),
             ("comp", "$format/Compilations/$album%aunique{}/$track - $title"),
             ("albumtype:soundtrack", "$format/Soundtracks/$album/$track $title}"),
-        )
-    }
+        ),
+    },
 }
 # TODO - migrate to external config. read this back from the YAML
 
 CMDS = {
-    "physical": {
-        "exec": ["beet", "-c", "/Users/joel/Music/beets/personal/config.yaml"]
-    },
-    "digital": {
-        "exec": ["beet", "-c", "/Users/joel/Music/beets/downloaded/config.yaml"]
-    },
+    "physical": {"exec": ["beet", "-c", "/Users/joel/Music/beets/personal/config.yaml"]},
+    "digital": {"exec": ["beet", "-c", "/Users/joel/Music/beets/downloaded/config.yaml"]},
     "test": {
         "exe_name": "beet",
-        "exec": ["beet", "-c", "/Users/joel/.config/beets/config.yaml"]
+        "exec": ["beet", "-c", "/Users/joel/.config/beets/config.yaml"],
         # "exe_name": "beet -c /Users/joel/.config/beets/config.yaml"
-    }
+    },
 }
 # NOTE: Could alternately use the full beet -c config_file.yaml instead of alias name
 
@@ -65,15 +62,19 @@ class ApiDataService:
             # track_name = REGEX_REPL.sub('', track_name)
             # track_album = REGEX_REPL.sub('', track_album)
             # track_artist = REGEX_REPL.sub('', track_artist)
-            q = AndQuery(subqueries=(
-                RegexpQuery("artist", "^{}$".format(REGEX_REPL.sub('.?', track_artist))),
-                RegexpQuery("album", "^{}$".format(REGEX_REPL.sub('.?', track_album))),
-                RegexpQuery("title", "^{}$".format(REGEX_REPL.sub('.?', track_name))),
-            ))
+            q = AndQuery(
+                subqueries=(
+                    RegexpQuery("artist", "^{}$".format(REGEX_REPL.sub(".?", track_artist))),
+                    RegexpQuery("album", "^{}$".format(REGEX_REPL.sub(".?", track_album))),
+                    RegexpQuery("title", "^{}$".format(REGEX_REPL.sub(".?", track_name))),
+                )
+            )
             resp = self._execute_query(q)
         else:
             # AndQuery()
-            resp = self._execute_query(f"artist:'{track_artist}' album:'{track_album}' title:'{track_name}'")
+            resp = self._execute_query(
+                f"artist:'{track_artist}' album:'{track_album}' title:'{track_name}'"
+            )
         # if resp.rows:
         #     print("found rows")
         return resp
@@ -95,12 +96,13 @@ class ApiDataService:
 
 
 class CliDataService:
-    """ A CLI-based version of interacting with the beets database.
+    """A CLI-based version of interacting with the beets database.
 
     This version of the service is intended more for generating ALAC files from existing FLAC
     and for possibly updating entries, namely the original_year. Might just make that part of
     a temporary plugin. Remains to be seen.
     """
+
     def __init__(self, database_name):
         self.exec = CMDS[database_name]["exec"]
         self.config_loc = self.exec[CONFIG_LOC_INDEX]
@@ -129,7 +131,13 @@ class CliDataService:
 
     def find_track(self, track_name, track_artist, track_album, use_regex=False):
         if use_regex:
-            resp = self._execute_get([f"artist::^{track_artist}$", f"album::^{track_album}$", f"title::^{track_name}$"])
+            resp = self._execute_get(
+                [
+                    f"artist::^{track_artist}$",
+                    f"album::^{track_album}$",
+                    f"title::^{track_name}$",
+                ]
+            )
         else:
             # NOTE: These commented-out versions were from prior to how query is handled in _execute_query.
             #       It now expects a list
@@ -137,7 +145,13 @@ class CliDataService:
             # resp = self._execute_query(f"artist:{track_artist}")  # NOTE: THIS works. Note no inner quotes around the query
             # resp = self._execute_query(f"artist:{track_artist} album:{track_album} title:{track_name}")
             # By default, the CLI returns results as "<ARTIST_NAME> - <ALBUM_NAME> - <TRACK_NAME>
-            resp = self._execute_get([f"artist:{track_artist}", f"album:{track_album}", f"title:{track_name}"])
+            resp = self._execute_get(
+                [
+                    f"artist:{track_artist}",
+                    f"album:{track_album}",
+                    f"title:{track_name}",
+                ]
+            )
         # if resp:
         #     print("found rows")
         return resp.splitlines()
@@ -147,10 +161,14 @@ class CliDataService:
             req_arr = [
                 f"artist::^{REGEX_REPL.sub('.?', track_artist)}$",
                 f"album::^{REGEX_REPL.sub('.?', track_album)}$",
-                f"title::^{REGEX_REPL.sub('.?', track_name)}$"
+                f"title::^{REGEX_REPL.sub('.?', track_name)}$",
             ]
         else:
-            req_arr = [f"artist:{track_artist}", f"album:{track_album}", f"title:{track_name}"]
+            req_arr = [
+                f"artist:{track_artist}",
+                f"album:{track_album}",
+                f"title:{track_name}",
+            ]
         resp = self._execute_convert(req_arr)
         # if resp:
         #     print("found rows")
@@ -166,7 +184,9 @@ if __name__ == "__main__":
         # db.execute_query_test("artist:'Powerman 5000' album:Transform")
 
         # trk_res = db.find_track("Lake of Fire", "Meat Puppets", "No Strings Attached")
-        trk_res = db.find_track("Hey, That's Right!", "Powerman 5000", "Transform", use_regex=True)
+        trk_res = db.find_track(
+            "Hey, That's Right!", "Powerman 5000", "Transform", use_regex=True
+        )
 
         if trk_res:
             print(len(trk_res.rows))
@@ -198,5 +218,5 @@ if __name__ == "__main__":
         # trk_res = db._execute_query(None)
         # if trk_res:
         #     print(trk_res)
-            # for rr in trk_res:
-            #     print(rr)
+        # for rr in trk_res:
+        #     print(rr)

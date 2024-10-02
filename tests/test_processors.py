@@ -1,18 +1,14 @@
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch, mock_open, MagicMock, create_autospec
+from unittest.mock import MagicMock, create_autospec, mock_open, patch
 
 from music_upgrader import applescript as apl
 from music_upgrader.db import CMDS, CliDataService
-from music_upgrader.processors import (CopyFiles)
+from music_upgrader.processors import CopyFiles
 
-TEST_CMDS = {
-    "test": {
-        "exe_name": "beet",
-        "exec": ["beet", "-c", "/tmp/beets/config.yaml"]
-    }
-}
+TEST_CMDS = {"test": {"exe_name": "beet", "exec": ["beet", "-c", "/tmp/beets/config.yaml"]}}
+
 
 class CopyFilesTests(unittest.TestCase):
 
@@ -43,11 +39,11 @@ class CopyFilesTests(unittest.TestCase):
 
             csv_row = {
                 "new_file": str(Path(temp_dir.name) / "NewFile.mp3"),
-                "location": apl.posix_path_to_hfs_path(o_file.name)
+                "location": apl.posix_path_to_hfs_path(o_file.name),
             }
             res = copy_files.process_row(csv_row)
             self.assertTrue(res.get("target_existed"))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()
