@@ -5,14 +5,12 @@ from unittest.mock import MagicMock, create_autospec, mock_open, patch
 
 from music_upgrader import applescript as apl
 from music_upgrader.db import CMDS, CliDataService
-from music_upgrader.processors import CopyFiles
+from music_upgrader.processors import CopyFiles, ConvertFiles
 
 TEST_CMDS = {"test": {"exe_name": "beet", "exec": ["beet", "-c", "/tmp/beets/config.yaml"]}}
 
 
-class CopyFilesTests(unittest.TestCase):
-
-    # @patch.dict(CMDS, TEST_CMDS)
+class ConvertFilesTests(unittest.TestCase):
     def test_loads_convert_destination_from_yaml_config_file(self):
         dummy_data_file = tempfile.NamedTemporaryFile()
         temp_dir = tempfile.TemporaryDirectory()
@@ -21,9 +19,13 @@ class CopyFilesTests(unittest.TestCase):
         with patch.object(Path, "open", mock_open(read_data=temp_yaml)):
             mock_svc = create_autospec(CliDataService)
             mock_svc.config_loc = "/tmp/beets/config.yaml"
-            copy_files = CopyFiles(dummy_data_file.name, mock_svc)
+            copy_files = ConvertFiles(dummy_data_file.name, mock_svc)
             self.assertEqual(str(copy_files.output_location), temp_dir.name)
 
+
+class CopyFilesTests(unittest.TestCase):
+
+    # @patch.dict(CMDS, TEST_CMDS)
     def xtest_copies_file_1(self):
         dummy_data_file = tempfile.NamedTemporaryFile()
         temp_dir = tempfile.TemporaryDirectory()

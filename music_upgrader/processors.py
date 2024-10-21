@@ -1,4 +1,5 @@
 import csv
+import logging
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
@@ -72,6 +73,9 @@ class LoadLatestLibrary:
 class BaseProcess:
     def __init__(self, data_file):
         self.data_path = Path(data_file)
+        # TODO - set up logger to be on the class name
+        # TODO TODO - configure
+        self.logger = logging.getLogger(__name__)
 
     def process_row(self, csv_row):
         raise NotImplementedError
@@ -79,7 +83,7 @@ class BaseProcess:
     def process_csv(self):
 
         data = read_csv(self.data_path)
-
+        self.logger.info("Read data file: %s", self.data_path)
         results = []
         for row in data:
             processed = self.process_row(row)
@@ -94,6 +98,7 @@ class BaseProcess:
         file_name = f"{self.data_path.stem}_results_{now.strftime(DATE_FORMAT_FOR_FILES)}.csv"
         out_location = Path(f"{ROOT_LOCATION}/{file_name}").expanduser()
         write_csv(processed, out_location)
+        self.logger.info("Wrote results to %s", out_location)
 
 
 class UpgradeCheck(BaseProcess):
@@ -102,6 +107,7 @@ class UpgradeCheck(BaseProcess):
         super().__init__(data_file)
         self.db = db
         self.should_compare_files = enable_file_comparison
+        self.logger.info("Initialized. Will compare files? - %s", enable_file_comparison)
 
     def process_row(self, csv_row):
         row_cpy = csv_row.copy()
@@ -109,23 +115,27 @@ class UpgradeCheck(BaseProcess):
         track_title = csv_row["track_name"]
         track_album = csv_row["album"]
         print(f"Checking... {track_title} by {track_artist} from the album {track_album}")
+        self.logger.info("Processing: '%s' by %s from the album '%s'", track_title, track_artist, track_album)
         can_upgrade = False
         upgrade_reason = ""
         result = None
         for use_regex in False, True:
             try:
+                self.logger.info("Querying API. Using Regex? %s", use_regex)
                 result = self.db.find_track(
                     track_title, track_artist, track_album, use_regex=use_regex
                 )
             except beets.dbcore.query.InvalidQueryError as e:
-                # print(e)
+                self.logger.exception("Invalid query provided to beets API.")
                 continue
             else:
                 if result:
+                    self.logger.debug("Found match. Regex used? %s", use_regex)
                     break
         else:
             upgrade_reason = "NOT_FOUND"
             print(SPACING, "Track not found")
+            self.logger.warning("Track not found: %s by %s", track_title, track_artist)
         if result:
             can_upgrade = False
             if found := result.get():
@@ -134,26 +144,32 @@ class UpgradeCheck(BaseProcess):
                 if self.should_compare_files:
                     if tracks.is_same_track(track_location, new_file):
                         print(SPACING, "Verified tracks are same song")
+                        self.logger.info("Tracks at %s and %s are the same song", track_location, new_file)
                         can_upgrade = tracks.is_upgradable(track_location, new_file)
                         if can_upgrade:
                             print(SPACING, "is upgradable")
+                            self.logger.info("%s is a better quality file", new_file)
                             upgrade_reason = "BETTER_QUALITY"
                             row_cpy["new_file"] = apl.posix_path_to_hfs_path(new_file)
                         else:
                             upgrade_reason = "SAME_QUALITY"
                             print(SPACING, "cannot be upgraded")
+                            self.logger.info("%s is the same quality as the existing file", new_file)
                     else:
                         upgrade_reason = "DO_NOT_MATCH"
                         print(SPACING, "[WARN] files do not contain the same song")
+                        self.logger.warning("Tracks at %s and %s are not the same song", track_location, new_file)
                 else:
                     can_upgrade = tracks.is_upgradable(track_location, new_file)
                     if can_upgrade:
                         upgrade_reason = "BETTER_QUALITY"
                         print(SPACING, "is upgradable")
+                        self.logger.info("%s is a better quality file", new_file)
                         row_cpy["new_file"] = apl.posix_path_to_hfs_path(new_file)
                     else:
                         upgrade_reason = "SAME_QUALITY"
                         print(SPACING, "cannot be upgraded")
+                        self.logger.info("%s is the same quality as the existing file", new_file)
                 row_cpy["b_id"] = found["id"]
                 row_cpy["b_original_year"] = found["original_year"]
                 row_cpy["b_year"] = found["year"]
@@ -171,8 +187,10 @@ class UpgradeCheck(BaseProcess):
         for row in data:
             processed = self.process_row(row)
             if processed["can_upgrade"]:
+                self.logger.info("Track can be upgraded")
                 for_upgrade.append(processed)
             else:
+                self.logger.info("Track cannot be upgraded")
                 no_upgrade.append(processed)
         return for_upgrade, no_upgrade
 
@@ -185,11 +203,13 @@ class UpgradeCheck(BaseProcess):
             f"{ROOT_LOCATION}/upgrade_checks_{now.strftime(DATE_FORMAT_FOR_FILES)}.csv"
         ).expanduser()
         write_csv(processed, out_location)
+        self.logger.info("Saving: %s", out_location)
         noup_location = Path(
             f"{ROOT_LOCATION}/no_upgrade_{now.strftime(DATE_FORMAT_FOR_FILES)}.csv"
         ).expanduser()
         if no_upgrade:
             write_csv(no_upgrade, noup_location)
+            self.logger.info("Saving: %s", noup_location)
 
 
 class CopyFiles(BaseProcess):
@@ -204,11 +224,6 @@ class CopyFiles(BaseProcess):
     def __init__(self, data_file, service: CliDataService):
         super().__init__(data_file)
         self.service = service
-        with Path(self.service.config_loc).expanduser().open() as config_file:
-            self.output_location = Path(
-                yaml.load(config_file, Loader=yaml.SafeLoader)["convert"]["dest"]
-            ).expanduser()
-        # assert self.output_location.exists()
 
     def process_row(self, csv_row):
         """Process a row for copying the intended new file to the music library location.
@@ -223,8 +238,10 @@ class CopyFiles(BaseProcess):
 
         original_track_path = Path(apl.hfs_path_to_posix_path(csv_row["location"]))
         print(SPACING, f"Replacing {original_track_path} with {file_to_copy}")
+        self.logger.info("Replacing %s with %s", original_track_path, file_to_copy)
         original_parent = original_track_path.parent
         target_path = original_parent / file_to_copy.name
+        self.logger.info("Target path: %s", target_path)
         target_exists = False
         if target_path.is_dir():
             print(SPACING, f"Expected target is: {target_path}")
@@ -234,9 +251,11 @@ class CopyFiles(BaseProcess):
             backup_target = target_path.with_suffix(".bak")
             target_path.rename(backup_target)
             print(SPACING, "Backing up existing file")
+            self.logger.info("Backing up previous file found at target")
         print(SPACING, "Moving file", str(file_to_copy))
         file_to_copy.rename(target_path)
         print(SPACING, "         to", str(target_path))
+        self.logger.info("File move complete")
 
         row_cpy["new_file"] = str(target_path)
         row_cpy["target_existed"] = target_exists
@@ -260,6 +279,7 @@ class ConvertFiles(BaseProcess):
                 yaml.load(config_file, Loader=yaml.SafeLoader)["convert"]["dest"]
             ).expanduser()
         # assert self.output_location.exists()
+        self.logger.info("ConvertFiles initialized. Outputting files to %s", self.output_location)
 
     def process_row(self, csv_row):
         """Process a row for copying the intended new file to the music library location.
@@ -282,12 +302,14 @@ class ConvertFiles(BaseProcess):
             #             be done regardless of whether we are working with FLAC files.
             return self.output_location / "FLAC" / track_artist / track_album / p.name
 
+        self.logger.info("Processing %s by %s from the album %s", track_title, track_artist, track_album)
         row_cpy = csv_row.copy()
         new_file_source = apl.hfs_path_to_posix_path(csv_row["new_file"])
         new_file_path = Path(new_file_source)
         if (
             new_file_path.suffix.lower() == ".flac"
         ):  # Could use Mutagen for this, but seems a bit overkill
+            self.logger.info("Converting FLAC file to ALAC")
             file_to_copy = _convert_track()
             if not file_to_copy.exists():
                 print(SPACING, "Could not find converted file -", str(file_to_copy))
@@ -300,6 +322,8 @@ class ConvertFiles(BaseProcess):
             # the original files that belong to Beets.
             print(f"Copying... {track_title} by {track_artist} from the album {track_album}")
             new_file_name = new_file_path.name
+            new_file_stem = new_file_path.stem
+            self.logger.info("Copying %s file to staging location", new_file_stem[1:].upper())
             file_ext = new_file_name.split(".")[-1]
             dest_root_dir = self.output_location / file_ext.upper()
             if not dest_root_dir.exists():
@@ -309,7 +333,8 @@ class ConvertFiles(BaseProcess):
             track_dir = dest_root_dir / csv_row["album_artist"] / track_album
             if not track_dir.exists():
                 track_dir.mkdir(parents=True)
-                print(SPACING, f"Created album directory")
+                self.logger.debug("Created album directory")
+                print(SPACING, "Created album directory")
             track_path = track_dir / new_file_name
             track_path.write_bytes(new_file_path.read_bytes())
 
@@ -320,6 +345,7 @@ class ConvertFiles(BaseProcess):
 
         # Choices are: nothing, b_original_year, b_year, itunes_year
         year_action = csv_row.get("year_action", "nothing")
+        self.logger.info("Updating year using %s action", year_action)
         match year_action.lower():
             case "b_original_year":
                 new_track_year = csv_row["b_original_year"]
@@ -336,6 +362,7 @@ class ConvertFiles(BaseProcess):
                 SPACING,
                 f"Updating year from {current_year} to {new_track_year} as per year action: {year_action}",
             )
+            self.logger.info("Updating year from %s to %s", current_year, new_track_year)
             o = mutagen.File(file_to_copy, easy=True)
             # This could result in a loss of fidelity since this replaces a potential full date, e.g. 1999-01-01
             # with just a year value.
@@ -362,13 +389,16 @@ class ApplyUpgrade(BaseProcess):
         original_track_path = Path(apl.hfs_path_to_posix_path(csv_row["location"]))
         original_track_path.unlink(missing_ok=True)
         try:
+            self.logger.info("Setting new file location for track with persistent ID %s", persistent_id)
             # TODO - delete old file prior to calling applescript! Otherwise, Apple Music/iTunes will
             #        rename the new files in unexpected ways. Not the biggest deal, but it'll make removal
             #        later more difficult
             tracks.set_file_location(persistent_id, new_file)
         except subprocess.SubprocessError:
+            self.logger.exception("Could not update track")
             row_cpy["success"] = False
         else:
+            self.logger.info("Update complete")
             row_cpy["new_file"] = new_file
             row_cpy["success"] = True
         return row_cpy
