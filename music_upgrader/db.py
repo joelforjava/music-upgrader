@@ -6,31 +6,11 @@ from beets.dbcore import AndQuery
 from beets.dbcore.query import RegexpQuery
 from beets.library import Item, Library
 
+from music_upgrader import settings
+
 REGEX_REPL = re.compile("[%s]" % re.escape(string.punctuation))
 
-DBS = {
-    "physical": {
-        "path": "/Users/joel/Music/Beets/main/musiclibrary.db",
-        "directory": "/Users/joel/Music/Beets/main",
-        "path_formats": (
-            ("default", "$format/$albumartist/$album%aunique{}/$track - $title"),
-            ("singleton", "$format/Non-Album/$artist/$title"),
-            ("comp", "$format/Compilations/$album%aunique{}/$track - $title"),
-            ("albumtype:soundtrack", "$format/Soundtracks/$album/$track $title}"),
-        ),
-    },
-    "test": {
-        "path": "/Users/joel/Music/Beets/main/musiclibrary.db",
-        "directory": "/Users/joel/Music/Beets/main",
-        "path_formats": (
-            ("default", "$format/$albumartist/$album%aunique{}/$track - $title"),
-            ("singleton", "$format/Non-Album/$artist/$title"),
-            ("comp", "$format/Compilations/$album%aunique{}/$track - $title"),
-            ("albumtype:soundtrack", "$format/Soundtracks/$album/$track $title}"),
-        ),
-    },
-}
-# TODO - migrate to external config. read this back from the YAML
+DBS = settings.load_db_info()
 
 CMDS = {
     "physical": {"exec": ["beet", "-c", "/Users/joel/Music/beets/personal/config.yaml"]},
