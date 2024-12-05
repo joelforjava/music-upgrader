@@ -8,7 +8,7 @@ import beets.dbcore.query
 import mutagen
 import yaml
 from dateutil.parser import ParserError, parse
-from rich.progress import Progress
+from rich.progress import track
 
 from . import applescript as apl
 from . import tracks
@@ -26,6 +26,7 @@ DATE_FORMAT_FOR_FILES = "%Y%m%dT%H%M%SZ"
 SPACING = " " * len("Checking...")
 """Spacing used to format output"""
 
+CSV_HEADER = ("persistent_id", "track_number", "track_name", "track_artist", "album", "album_artist", "track_year", "last_played", "play_count", "location")
 
 def read_csv(file_path: Path):
     data = []
@@ -66,8 +67,16 @@ class LoadLatestLibrary:
                     f"{self.data_path.stem}_{now.strftime(DATE_FORMAT_FOR_FILES)}"
                 )
             )
-
-        apl.run_script(self.script_path)
+        ids = tracks.load_all_ids()
+        items = []
+        for _id in track(ids, description="Collecting library details"):
+            info = apl.run(f"{apl.SELECT_TRACK_BY_ID.format(_id)}\n{apl.GET_TRACK_INFO}")
+            items.append((_id, *info.splitlines()))
+        with self.data_path.open("w") as csv_file:
+            writer = csv.writer(csv_file)
+            writer.writerow(CSV_HEADER)
+            writer.writerows(items)
+        return items
 
 
 class BaseProcess:
@@ -139,7 +148,7 @@ class UpgradeCheck(BaseProcess):
         if result:
             can_upgrade = False
             if found := result.get():
-                track_location = apl.hfs_path_to_posix_path(csv_row["location"])
+                track_location = csv_row["location"]
                 new_file = found["path"].decode("utf-8")
                 if self.should_compare_files:
                     if tracks.is_same_track(track_location, new_file):
@@ -150,7 +159,7 @@ class UpgradeCheck(BaseProcess):
                             print(SPACING, "is upgradable")
                             self.logger.info("%s is a better quality file", new_file)
                             upgrade_reason = "BETTER_QUALITY"
-                            row_cpy["new_file"] = apl.posix_path_to_hfs_path(new_file)
+                            row_cpy["new_file"] = str(new_file)
                         else:
                             upgrade_reason = "SAME_QUALITY"
                             print(SPACING, "cannot be upgraded")
@@ -165,7 +174,7 @@ class UpgradeCheck(BaseProcess):
                         upgrade_reason = "BETTER_QUALITY"
                         print(SPACING, "is upgradable")
                         self.logger.info("%s is a better quality file", new_file)
-                        row_cpy["new_file"] = apl.posix_path_to_hfs_path(new_file)
+                        row_cpy["new_file"] = str(new_file)
                     else:
                         upgrade_reason = "SAME_QUALITY"
                         print(SPACING, "cannot be upgraded")
@@ -236,7 +245,7 @@ class CopyFiles(BaseProcess):
         new_file_source = csv_row["new_file"]
         file_to_copy = Path(new_file_source)
 
-        original_track_path = Path(apl.hfs_path_to_posix_path(csv_row["location"]))
+        original_track_path = Path(csv_row["location"])
         print(SPACING, f"Replacing {original_track_path} with {file_to_copy}")
         self.logger.info("Replacing %s with %s", original_track_path, file_to_copy)
         original_parent = original_track_path.parent
@@ -304,7 +313,7 @@ class ConvertFiles(BaseProcess):
 
         self.logger.info("Processing %s by %s from the album %s", track_title, track_artist, track_album)
         row_cpy = csv_row.copy()
-        new_file_source = apl.hfs_path_to_posix_path(csv_row["new_file"])
+        new_file_source = csv_row["new_file"]
         new_file_path = Path(new_file_source)
         if (
             new_file_path.suffix.lower() == ".flac"
@@ -386,7 +395,7 @@ class ApplyUpgrade(BaseProcess):
         row_cpy = csv_row.copy()
         persistent_id = csv_row["persistent_id"]
         new_file = apl.posix_path_to_hfs_path(csv_row["new_file"])
-        original_track_path = Path(apl.hfs_path_to_posix_path(csv_row["location"]))
+        original_track_path = Path(csv_row["location"])
         original_track_path.unlink(missing_ok=True)
         try:
             self.logger.info("Setting new file location for track with persistent ID %s", persistent_id)

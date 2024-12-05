@@ -12,6 +12,7 @@ REGEX_REPL = re.compile("[%s]" % re.escape(string.punctuation))
 
 DBS = settings.load_db_info()
 
+# TODO - migrate to use config file
 CMDS = {
     "physical": {"exec": ["beet", "-c", "/Users/joel/Music/beets/personal/config.yaml"]},
     "digital": {"exec": ["beet", "-c", "/Users/joel/Music/beets/downloaded/config.yaml"]},

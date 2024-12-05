@@ -1,3 +1,4 @@
+import ast
 import subprocess
 from pathlib import Path
 
@@ -10,6 +11,8 @@ from mutagen.mp4 import MP4
 from music_upgrader import applescript
 from music_upgrader.applescript import (
     GET_TRACK_FIELD,
+    GET_TRACK_INFO,
+    LOAD_ALL_FILE_IDS,
     SELECT_TRACK_BY_ARTIST_TRACK_NAME_ALBUM,
     SELECT_TRACK_BY_ID,
     SET_TRACK_FILE_LOCATION,
@@ -35,6 +38,21 @@ def _get_data_by_fields(
     return applescript.run(
         f"{SELECT_TRACK_BY_ARTIST_TRACK_NAME_ALBUM.format(track_artist, track_name, track_album)}\n{sub_cmd}"
     )
+
+
+def load_all_ids():
+    ids = applescript.run(LOAD_ALL_FILE_IDS)
+    return list(map(lambda x: x.strip(), ids.split(",")))
+    # return [ii.strip() for ii in ids.split(",")]
+
+
+def load_all():
+    ids = load_all_ids()
+    items = []
+    for _id in ids:
+        info = applescript.run(f"{SELECT_TRACK_BY_ID.format(_id)}\n{GET_TRACK_INFO}")
+        items.append((_id, *info.splitlines()))
+    return items
 
 
 def get_year(track_id: str):
@@ -105,3 +123,10 @@ def is_upgradable(old_file: Path | str, new_file: Path | str) -> bool:
         if n.info.codec.lower() == "alac":
             return True
     return False
+
+
+if __name__ == "__main__":
+    _all = load_all()
+    for aa in _all:
+        print(aa)
+    # print(load_all())

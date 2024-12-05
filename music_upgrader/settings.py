@@ -1,31 +1,50 @@
 import configparser
 import json
-import logging
 import logging.config
+import os
 from pathlib import Path
 
 import yaml
 
 
-# TODO - figure out how to make this dynamic
-SETTINGS_PATH = Path(__file__).parent.parent / 'config.ini'
-
 config = configparser.ConfigParser(delimiters=["="])
-config.read(SETTINGS_PATH)
 
-logging.config.dictConfig(json.loads(Path(config["DEFAULT"]["logging_config_name"]).read_text()))
+_conf_paths = map(lambda x: Path(x) / "config.ini", [
+    Path.cwd(),
+    Path.home() / ".config" / "music_upgrader",
+    Path(__file__).parent.parent,  # This is meant to be the file in the local code repo
+    Path(os.environ.get("MUSIC_UPGRADER_CONF", __file__)),  # Need a good default. Can't leave None or there'll be an error
+])
 
+config.read(_conf_paths)
+# for loc in Path.cwd(), Path.home() / ".config", Path(__file__).parent.parent, Path(os.environ.get("MUSIC_UPGRADER_CONF", __file__)):
+#     try:
+#         with (loc / "config.ini").open("r") as cf:
+#             config.read(cf)
+#     except IOError:
+#         pass
+
+try:
+    logging.config.dictConfig(json.loads(Path(config["DEFAULT"]["logging_config_loc"]).read_text()))
+except (IOError, KeyError):
+    # TODO - set NullHandler?
+    # Not sure KeyError should be caught... we WANT there to be some sort of default!
+    pass
+
+LOG = logging.getLogger(__name__)
 
 EXPECTED_KEYS = ["path", "directory", "path_formats"]
 
 
 def load_db_info():
     dbs = {}
-    avail = config["library"]["names"].split(",")
+    avail = config.get("library", "names", fallback="").split(",")
     for ll in avail:
-        print("Loading {}".format(ll))
+        if not ll:
+            continue
+        LOG.debug("Loading %s", ll)
         config_items = config[f"library.{ll}"]
-        print(config_items["path"])
+        LOG.debug("Path: %s", config_items["path"])
         tmp = dict(config_items)
         if "config_file" in config_items:
             with Path(config_items["config_file"]).open() as f:
@@ -39,8 +58,7 @@ def load_db_info():
             if k in EXPECTED_KEYS:
                 dbs[ll][k] = tmp[k]
 
-    # print(json.dumps(dbs, indent=2))
-    print(dbs)
+    LOG.info("Loaded %s databases: %s", len(dbs.keys()), dbs.keys())
     return dbs
 
 

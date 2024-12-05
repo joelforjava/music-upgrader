@@ -5,6 +5,9 @@ LOAD_ALL_PLAY_COUNTS = (
     'tell application "Music" to get {persistent ID, played count} of every track in playlist 1'
 )
 
+LOAD_ALL_IDS = 'tell application "Music" to get persistent ID of every track in playlist 1'
+
+LOAD_ALL_FILE_IDS = 'tell application "Music" to get persistent ID of every file track in playlist 1'
 
 SELECT_TRACK_BY_ID = """
     tell application "Music"
@@ -27,10 +30,9 @@ GET_TRACK_INFO = """
             set l to location
             set l to POSIX path of l
         end try
-        return artist & "\n" & album artist & "\n" & name & "\n" & l
+        return track number & "\n" & name & "\n" & artist & "\n" & album & "\n" & album artist & "\n" & year & "\n" & played date as text & "\n" & played count & "\n" & l
     end tell
 """
-# TODO - what fields are required?
 
 GET_TRACK_FIELD = """
     tell application "Music" to tell t
@@ -86,6 +88,8 @@ def run_script(script_path: Path):
 
 
 def hfs_path_to_posix_path(hfs_path: str) -> str:
+    # TODO - double check usage. The new 'load' logic uses POSIX from the beginning
+    #        for the Apple Music file location
     tokens = hfs_path.split(":")
     return "/" + "/".join(tokens[1:])
 
@@ -97,6 +101,8 @@ def posix_path_to_hfs_path(posix_path: str) -> str:
     as the drive name. May need to change once on the computer itself.
     """
     drive_name = "Macintosh HD"
+    # This currently will cause problems for bands like AC/DC
+    # BUT... Beets appears to have been smart enough to not use / in folder names
     return f"{drive_name}{posix_path}".replace("/", ":")
 
 
