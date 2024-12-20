@@ -3,6 +3,7 @@ import logging
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Final
 
 import beets.dbcore.query
 import mutagen
@@ -277,6 +278,8 @@ class ConvertFiles(BaseProcess):
     If the destination already exists, back up the file before copying the new file!
     This will mostly be relevant for MP3 files being replaced by higher quality MP3 files.
 
+    If a higher quality file is a FLAC file, it will be converted to ALAC and this converted file will be used instead.
+
     This simply copies the files over. It does not call any AppleScript!
     """
 
@@ -301,20 +304,17 @@ class ConvertFiles(BaseProcess):
         track_album = csv_row["album"]
 
         def _convert_track():
+            """Convert a FLAC file to ALAC, which stages the file to a new location."""
             print(f"Converting... {track_title} by {track_artist} from the album {track_album}")
-            # TODO - rethink regex. If you use regex, it'll expect all of these values to be exact
-            #        so, disabled it for now. Likely will need to do a loop like for checks
-            self.service.convert(track_title, track_artist, track_album, use_regex=False)
-            p = new_file_path.with_suffix(".m4a")
-            # TODO - might be better to use the artist/album values from the source file itself
-            # TODO TODO - also want to copy "original_year" to the "year" field. This might need to
-            #             be done regardless of whether we are working with FLAC files.
-            return self.output_location / "FLAC" / track_artist / track_album / p.name
+            self.service.convert_2(new_file_path)
+            parts = new_file_path.parts
+            t = list(parts[parts.index("FLAC"):])
+            return self.output_location.joinpath(*t).with_suffix(".m4a")
 
         self.logger.info("Processing %s by %s from the album %s", track_title, track_artist, track_album)
         row_cpy = csv_row.copy()
         new_file_source = csv_row["new_file"]
-        new_file_path = Path(new_file_source)
+        new_file_path: Final[Path] = Path(new_file_source)
         if (
             new_file_path.suffix.lower() == ".flac"
         ):  # Could use Mutagen for this, but seems a bit overkill
@@ -325,6 +325,8 @@ class ConvertFiles(BaseProcess):
                 # TODO - how do we handle this from a flow perspective? Should everything halt?
                 #        At the very least, should log the error in the row. Perhaps "success"?
                 raise ValueError(f"Could not find converted file - {str(file_to_copy)}")
+            else:
+                print(SPACING, "New file located at", str(file_to_copy))
         else:
             # FLAC files are the only files that are converted to a different format. The others
             # should be copied from the original directory to prevent the later process from moving
@@ -339,12 +341,14 @@ class ConvertFiles(BaseProcess):
                 dest_root_dir.mkdir(parents=True)
                 print(SPACING, f"Created {file_ext.upper()} Destination directory")
 
-            track_dir = dest_root_dir / csv_row["album_artist"] / track_album
-            if not track_dir.exists():
-                track_dir.mkdir(parents=True)
+            _parts = new_file_path.parts
+            _sub_parts = list(_parts[_parts.index(file_ext.upper())+1:])
+            track_path = dest_root_dir.joinpath(*_sub_parts)
+
+            if not track_path.parent.exists():
+                track_path.parent.mkdir(parents=True, exist_ok=True)
                 self.logger.debug("Created album directory")
                 print(SPACING, "Created album directory")
-            track_path = track_dir / new_file_name
             track_path.write_bytes(new_file_path.read_bytes())
 
             file_to_copy = track_path

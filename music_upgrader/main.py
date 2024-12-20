@@ -47,6 +47,7 @@ def load(ctx):
 @cli.command(name="check-upgrade")
 @click.pass_context
 def check(ctx):
+    """Check for files in the iTunes library that can be upgraded from files managed by beets."""
     click.echo("Checking upgrade ...")
     db_name = ctx.obj["DB_NAME"]
     p = Path(f"{ROOT_LOCATION}/libraryFiles.csv").expanduser()
@@ -58,6 +59,7 @@ def check(ctx):
 @click.option("-f", "--file", "_file", help="The file to process")
 @click.pass_context
 def copy_files(ctx, _file):
+    """Copy converted files to the appropriate location in your iTunes library."""
     click.echo("Copying files ...")
     db_name = ctx.obj["DB_NAME"]
     p = Path(f"{ROOT_LOCATION}/{_file}").expanduser()
@@ -69,6 +71,7 @@ def copy_files(ctx, _file):
 @click.option("-f", "--file", "_file", help="The file to process")
 @click.pass_context
 def convert_files(ctx, _file):
+    """Round up higher quality files to the staging area, converting any FLAC to ALAC along the way."""
     click.echo("Converting files ...")
     db_name = ctx.obj["DB_NAME"]
     p = Path(f"{ROOT_LOCATION}/{_file}").expanduser()
@@ -80,6 +83,7 @@ def convert_files(ctx, _file):
 @click.option("-f", "--file", "_file", help="The file to process")
 @click.pass_context
 def replace_files(ctx, _file):
+    """Interface with iTunes and replace the file references with your new copies."""
     click.echo("Replacing files ...")
     p = Path(f"{ROOT_LOCATION}/{_file}").expanduser()
     a = ApplyUpgrade(p)
