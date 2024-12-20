@@ -2,7 +2,7 @@ from pathlib import Path
 
 import click
 
-from .db import ApiDataService, CliDataService
+from .db import ApiDataService, CliDataService, CMDS
 from .processors import (
     MODULE_PATH,
     ROOT_LOCATION,
@@ -25,6 +25,7 @@ CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
     "-d",
     "--database",
     help="The database to use for upgrade checks",
+    type=click.Choice(CMDS.keys()),
     default="physical",
 )
 @click.pass_context

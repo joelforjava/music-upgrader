@@ -2,6 +2,7 @@ import configparser
 import json
 import logging.config
 import os
+from collections import defaultdict
 from pathlib import Path
 
 import yaml
@@ -17,12 +18,6 @@ _conf_paths = map(lambda x: Path(x) / "config.ini", [
 ])
 
 config.read(_conf_paths)
-# for loc in Path.cwd(), Path.home() / ".config", Path(__file__).parent.parent, Path(os.environ.get("MUSIC_UPGRADER_CONF", __file__)):
-#     try:
-#         with (loc / "config.ini").open("r") as cf:
-#             config.read(cf)
-#     except IOError:
-#         pass
 
 try:
     logging.config.dictConfig(json.loads(Path(config["DEFAULT"]["logging_config_loc"]).read_text()))
@@ -36,8 +31,9 @@ LOG = logging.getLogger(__name__)
 EXPECTED_KEYS = ["path", "directory", "path_formats"]
 
 
-def load_db_info():
+def load():
     dbs = {}
+    cmds = defaultdict(dict)
     avail = config.get("library", "names", fallback="").split(",")
     for ll in avail:
         if not ll:
@@ -53,14 +49,16 @@ def load_db_info():
         else:
             tmp["path_formats"] = tuple(config.items(f"library.{ll}.formats"))
 
+        cmds[ll]["exec"] = config_items["exec"].split()
         dbs[ll] = {}
         for k in tmp.keys():
+            # Cannot deviate from EXPECTED_KEYS due to how the Beets Library is instantiated
             if k in EXPECTED_KEYS:
                 dbs[ll][k] = tmp[k]
 
     LOG.info("Loaded %s databases: %s", len(dbs.keys()), dbs.keys())
-    return dbs
+    return dbs, cmds
 
 
 if __name__ == "__main__":
-    load_db_info()
+    load()

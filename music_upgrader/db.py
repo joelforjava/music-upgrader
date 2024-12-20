@@ -8,21 +8,10 @@ from beets.library import Item, Library
 
 from music_upgrader import settings
 
+# ‐
 REGEX_REPL = re.compile("[%s]" % re.escape(string.punctuation))
 
-DBS = settings.load_db_info()
-
-# TODO - migrate to use config file
-CMDS = {
-    "physical": {"exec": ["beet", "-c", "/Users/joel/Music/beets/personal/config.yaml"]},
-    "digital": {"exec": ["beet", "-c", "/Users/joel/Music/beets/downloaded/config.yaml"]},
-    "test": {
-        "exe_name": "beet",
-        "exec": ["beet", "-c", "/Users/joel/.config/beets/config.yaml"],
-        # "exe_name": "beet -c /Users/joel/.config/beets/config.yaml"
-    },
-}
-# NOTE: Could alternately use the full beet -c config_file.yaml instead of alias name
+DBS, CMDS = settings.load()
 
 CONFIG_LOC_INDEX = -1
 
@@ -153,6 +142,10 @@ class CliDataService:
         resp = self._execute_convert(req_arr)
         # if resp:
         #     print("found rows")
+        return resp.splitlines()
+
+    def convert_2(self, current_beet_path):
+        resp = self._execute_convert([f"path:{current_beet_path}"])
         return resp.splitlines()
 
 

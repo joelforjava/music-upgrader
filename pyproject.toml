@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "music-upgrader"
 version = "0.1.0"
-description = ""
+description = "Upgrade the track files for Apple Music/iTunes via a Beets music collection"
 authors = ["Joel Cochran <joel@cochrandigital.com>"]
 readme = "README.md"
 
@@ -14,6 +14,7 @@ inflection = "^0.5.1"
 rich = "^13.8.0"
 click = "^8.1.7"
 pyyaml = "^6.0.2"
+discogs-client = "^2.3.0"
 
 
 [tool.poetry.group.test.dependencies]
@@ -26,6 +27,11 @@ pylast = "^5.3.0"
 black = "^24.8.0"
 isort = "^5.13.2"
 ruff = "^0.5.7"
+
+
+[tool.poetry.group.beets.dependencies]
+pillow = "^11.0.0"
+# Ideally, discogs would go here too
 
 [tool.poetry.scripts]
 mup = "music_upgrader.main:cli"
