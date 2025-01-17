@@ -238,8 +238,7 @@ class CopyFiles(BaseProcess):
     def process_row(self, csv_row):
         """Process a row for copying the intended new file to the music library location.
 
-        Copy the intended new file to the music library location. If the new file is a FLAC file,
-        it will be converted to ALAC and this converted file will be used instead.
+        Copy the intended new file to the music library location.
         """
 
         row_cpy = csv_row.copy()
