@@ -1,0 +1,36 @@
+[DEFAULT]
+library_file_name=musiclibrary.db
+config_file_name=config.yaml
+logging_config_root_dir=/Users/me/work/music-upgrader
+logging_config_loc=%(logging_config_root_dir)s/logging.json
+
+[library]
+names=main,test
+
+[library.main]
+root_directory=/Users/me/Music/Beets
+directory=%(root_directory)s/main
+path=%(directory)s/%(library_file_name)s
+config_file=%(root_directory)s/%(config_file_name)s
+exec=beet -c /Users/me/Music/Beets/config.yaml
+
+# Need to make sure = is the only delimiter
+[library.main.formats]
+default=$format/$albumartist/$album%%aunique{}/$track - $title
+singleton=$format/Non-Album/$artist/$title
+comp=$format/Compilations/$album%%aunique{}/$track - $title
+albumtype:soundtrack=$format/Soundtracks/$album/$track $title}
+
+
+[library.test]
+root_directory=/Users/me/Music/Beets
+directory=%(root_directory)s/main
+path=%(directory)s/%(library_file_name)s
+;config_file=%(root_directory)s/%(config_file_name)s
+exec=beet -c /Users/me/Music/Beets/config.yaml
+
+[library.test.formats]
+default=$format/$albumartist/$album%%aunique{}/$track - $title
+singleton=$format/Non-Album/$artist/$title
+comp=$format/Compilations/$album%%aunique{}/$track - $title
+albumtype:soundtrack=$format/Soundtracks/$album/$track $title}

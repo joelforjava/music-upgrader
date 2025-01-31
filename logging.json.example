@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "disable_existing_loggers": false,
+  "formatters": {
+    "standard": {
+      "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    }
+  },
+  "handlers": {
+    "file": {
+      "class": "logging.FileHandler",
+      "level": "INFO",
+      "formatter": "standard",
+      "filename": "music-upgrader.log",
+      "mode": "w"
+    }
+  },
+  "root": {
+    "level": "INFO",
+    "handlers": ["file"]
+  }
+}
