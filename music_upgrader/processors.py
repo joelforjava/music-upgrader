@@ -9,7 +9,7 @@ import beets.dbcore.query
 import mutagen
 import yaml
 from dateutil.parser import ParserError, parse
-from rich.progress import track
+from rich.progress import Progress
 
 from . import applescript as apl
 from . import tracks
@@ -69,10 +69,16 @@ class LoadLatestLibrary:
                 )
             )
         ids = tracks.load_all_ids()
+        num_ids = len(ids)
         items = []
-        for _id in track(ids, description="Collecting library details"):
-            info = apl.run(f"{apl.SELECT_TRACK_BY_ID.format(_id)}\n{apl.GET_TRACK_INFO}")
-            items.append((_id, *info.splitlines()))
+        with Progress() as progress:
+            main_task = progress.add_task("Collecting Library Details...", total=num_ids)
+            while not progress.finished:
+                for _id in ids:
+                    info = apl.run(f"{apl.SELECT_TRACK_BY_ID.format(_id)}\n{apl.GET_TRACK_INFO}")
+                    items.append((_id, *info.splitlines()))
+                    progress.update(main_task, advance=1)
+
         with self.data_path.open("w") as csv_file:
             writer = csv.writer(csv_file)
             writer.writerow(CSV_HEADER)
