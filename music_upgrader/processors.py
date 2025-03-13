@@ -1,6 +1,8 @@
+import concurrent.futures
 import csv
 import logging
 import subprocess
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Final
@@ -70,14 +72,17 @@ class LoadLatestLibrary:
             )
         ids = tracks.load_all_ids()
         num_ids = len(ids)
-        items = []
         with Progress() as progress:
-            main_task = progress.add_task("Collecting Library Details...", total=num_ids)
-            while not progress.finished:
-                for _id in ids:
-                    info = apl.run(f"{apl.SELECT_TRACK_BY_ID.format(_id)}\n{apl.GET_TRACK_INFO}")
-                    items.append((_id, *info.splitlines()))
+
+            def _get_track_info(track_id):
+                track_info = apl.run(f"{apl.SELECT_TRACK_BY_ID.format(track_id)}\n{apl.GET_TRACK_INFO}")
+                if not progress.finished:
                     progress.update(main_task, advance=1)
+                return track_id, *track_info.splitlines()
+
+            main_task = progress.add_task("Collecting Library Details...", total=num_ids)
+            with ThreadPoolExecutor(max_workers=8) as pool:
+                items = sorted(pool.map(_get_track_info, ids), key=lambda x: (x[3], x[4], int(x[1])))
 
         with self.data_path.open("w") as csv_file:
             writer = csv.writer(csv_file)
