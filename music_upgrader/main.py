@@ -45,12 +45,19 @@ def load(ctx):
 
 
 @cli.command(name="check-upgrade")
+@click.option(
+    "-f",
+    "--file",
+    "_file",
+    help=f"The library file name to process. Must be stored in {ROOT_LOCATION}",
+    default="libraryFiles.csv"
+)
 @click.pass_context
-def check(ctx):
+def check(ctx, _file):
     """Check for files in the iTunes library that can be upgraded from files managed by beets."""
     click.echo("Checking upgrade ...")
     db_name = ctx.obj["DB_NAME"]
-    p = Path(f"{ROOT_LOCATION}/libraryFiles.csv").expanduser()
+    p = Path(f"{ROOT_LOCATION}/{_file}").expanduser()
     u = UpgradeCheck(p, ApiDataService(db_name))
     u.run()
 

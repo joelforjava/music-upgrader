@@ -5,7 +5,7 @@ import subprocess
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Final
+from typing import Final, Optional
 
 import beets.dbcore.query
 import mutagen
@@ -137,8 +137,48 @@ class UpgradeCheck(BaseProcess):
         track_album = csv_row["album"]
         print(f"Checking... {track_title} by {track_artist} from the album {track_album}")
         self.logger.info("Processing: '%s' by %s from the album '%s'", track_title, track_artist, track_album)
-        can_upgrade = False
-        upgrade_reason = ""
+        if result := self.check_for_track(track_title, track_artist, track_album):
+            found = result.get()
+            new_file = found["path"].decode("utf-8")
+            upgrade_reason = self.determine_upgrade_status(csv_row["location"], new_file, self.should_compare_files)
+            can_upgrade = upgrade_reason in ["BETTER_QUALITY"]
+            if can_upgrade:
+                print(SPACING, "is upgradable")
+                self.logger.info("this track will be upgraded due to: %s", upgrade_reason)
+                row_cpy["new_file"] = new_file
+                row_cpy["b_id"] = found["id"]
+                row_cpy["b_original_year"] = found["original_year"]
+                row_cpy["b_year"] = found["year"]
+                row_cpy["year_action"] = "itunes_year"
+            else:
+                print(SPACING, "cannot be upgraded")
+                self.logger.info("this track will not be upgraded. Reason: %s", upgrade_reason)
+        else:
+            upgrade_reason = "NOT_FOUND"
+            can_upgrade = False
+        row_cpy["upgrade_reason"] = upgrade_reason
+        row_cpy["can_upgrade"] = can_upgrade
+        return row_cpy
+
+    @staticmethod
+    def determine_upgrade_status(current_track_location, proposed_track, should_compare_file_tags) -> str:
+
+        def _is_upgradable(_curr, _new):
+            if tracks.is_upgradable(_curr, _new):
+                return "BETTER_QUALITY"
+            else:
+                return "SAME_QUALITY"
+
+        if should_compare_file_tags:
+            if tracks.is_same_track(current_track_location, proposed_track):
+                return _is_upgradable(current_track_location, proposed_track)
+            else:
+                return "DO_NOT_MATCH"
+        else:
+            return _is_upgradable(current_track_location, proposed_track)
+
+    def check_for_track(self, track_title, track_artist, track_album):
+        """Look for the file within the selected beets library"""
         result = None
         for use_regex in False, True:
             try:
@@ -154,50 +194,9 @@ class UpgradeCheck(BaseProcess):
                     self.logger.debug("Found match. Regex used? %s", use_regex)
                     break
         else:
-            upgrade_reason = "NOT_FOUND"
             print(SPACING, "Track not found")
             self.logger.warning("Track not found: %s by %s", track_title, track_artist)
-        if result:
-            can_upgrade = False
-            if found := result.get():
-                track_location = csv_row["location"]
-                new_file = found["path"].decode("utf-8")
-                if self.should_compare_files:
-                    if tracks.is_same_track(track_location, new_file):
-                        print(SPACING, "Verified tracks are same song")
-                        self.logger.info("Tracks at %s and %s are the same song", track_location, new_file)
-                        can_upgrade = tracks.is_upgradable(track_location, new_file)
-                        if can_upgrade:
-                            print(SPACING, "is upgradable")
-                            self.logger.info("%s is a better quality file", new_file)
-                            upgrade_reason = "BETTER_QUALITY"
-                            row_cpy["new_file"] = str(new_file)
-                        else:
-                            upgrade_reason = "SAME_QUALITY"
-                            print(SPACING, "cannot be upgraded")
-                            self.logger.info("%s is the same quality as the existing file", new_file)
-                    else:
-                        upgrade_reason = "DO_NOT_MATCH"
-                        print(SPACING, "[WARN] files do not contain the same song")
-                        self.logger.warning("Tracks at %s and %s are not the same song", track_location, new_file)
-                else:
-                    can_upgrade = tracks.is_upgradable(track_location, new_file)
-                    if can_upgrade:
-                        upgrade_reason = "BETTER_QUALITY"
-                        print(SPACING, "is upgradable")
-                        self.logger.info("%s is a better quality file", new_file)
-                        row_cpy["new_file"] = str(new_file)
-                    else:
-                        upgrade_reason = "SAME_QUALITY"
-                        print(SPACING, "cannot be upgraded")
-                        self.logger.info("%s is the same quality as the existing file", new_file)
-                row_cpy["b_id"] = found["id"]
-                row_cpy["b_original_year"] = found["original_year"]
-                row_cpy["b_year"] = found["year"]
-                row_cpy["year_action"] = "itunes_year"
-        row_cpy["upgrade_reason"] = upgrade_reason
-        row_cpy["can_upgrade"] = can_upgrade
-        return row_cpy
+        return result
 
     def process_csv(self):
 
