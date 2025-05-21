@@ -4,8 +4,9 @@ import logging
 import subprocess
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from datetime import datetime, timezone
+from itertools import groupby
 from pathlib import Path
-from typing import Final
+from typing import Final, Optional
 
 import beets.dbcore.query
 import mutagen
@@ -111,6 +112,13 @@ class BaseProcess:
             results.append(processed)
         return results
 
+    def process_csv_v2(self):
+        data = read_csv(self.data_path)
+        self.logger.info("Read data file: %s", self.data_path)
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            results = sorted(pool.map(self.process_row, data), key=lambda x: (x[3], x[4], int(x[1])))
+        return results
+
     def run(self):
         # with Progress() as progress:
         #     pass
@@ -135,10 +143,48 @@ class UpgradeCheck(BaseProcess):
         track_artist = csv_row["track_artist"]
         track_title = csv_row["track_name"]
         track_album = csv_row["album"]
-        print(f"Checking... {track_title} by {track_artist} from the album {track_album}")
         self.logger.info("Processing: '%s' by %s from the album '%s'", track_title, track_artist, track_album)
-        can_upgrade = False
-        upgrade_reason = ""
+        if result := self.check_for_track(track_title, track_artist, track_album):
+            found = result.get()
+            new_file = found["path"].decode("utf-8")
+            upgrade_reason = self.determine_upgrade_status(csv_row["location"], new_file, self.should_compare_files)
+            can_upgrade = upgrade_reason in ["BETTER_QUALITY"]
+            if can_upgrade:
+                self.logger.info("\tthis track will be upgraded due to: %s", upgrade_reason)
+                row_cpy["new_file"] = new_file
+                row_cpy["b_id"] = found["id"]
+                row_cpy["b_original_year"] = found["original_year"]
+                row_cpy["b_year"] = found["year"]
+                row_cpy["year_action"] = "itunes_year"
+            else:
+                self.logger.info("\tthis track will not be upgraded. Reason: %s", upgrade_reason)
+        else:
+            upgrade_reason = "NOT_FOUND"
+            can_upgrade = False
+            self.logger.info("\tthis track was not found in the database")
+        row_cpy["upgrade_reason"] = upgrade_reason
+        row_cpy["can_upgrade"] = can_upgrade
+        return row_cpy
+
+    @staticmethod
+    def determine_upgrade_status(current_track_location, proposed_track, should_compare_file_tags) -> str:
+
+        def _is_upgradable(_curr, _new):
+            if tracks.is_upgradable(_curr, _new):
+                return "BETTER_QUALITY"
+            else:
+                return "SAME_QUALITY"
+
+        if should_compare_file_tags:
+            if tracks.is_same_track(current_track_location, proposed_track):
+                return _is_upgradable(current_track_location, proposed_track)
+            else:
+                return "DO_NOT_MATCH"
+        else:
+            return _is_upgradable(current_track_location, proposed_track)
+
+    def check_for_track(self, track_title, track_artist, track_album):
+        """Look for the file within the selected beets library"""
         result = None
         for use_regex in False, True:
             try:
@@ -154,50 +200,9 @@ class UpgradeCheck(BaseProcess):
                     self.logger.debug("Found match. Regex used? %s", use_regex)
                     break
         else:
-            upgrade_reason = "NOT_FOUND"
             print(SPACING, "Track not found")
             self.logger.warning("Track not found: %s by %s", track_title, track_artist)
-        if result:
-            can_upgrade = False
-            if found := result.get():
-                track_location = csv_row["location"]
-                new_file = found["path"].decode("utf-8")
-                if self.should_compare_files:
-                    if tracks.is_same_track(track_location, new_file):
-                        print(SPACING, "Verified tracks are same song")
-                        self.logger.info("Tracks at %s and %s are the same song", track_location, new_file)
-                        can_upgrade = tracks.is_upgradable(track_location, new_file)
-                        if can_upgrade:
-                            print(SPACING, "is upgradable")
-                            self.logger.info("%s is a better quality file", new_file)
-                            upgrade_reason = "BETTER_QUALITY"
-                            row_cpy["new_file"] = str(new_file)
-                        else:
-                            upgrade_reason = "SAME_QUALITY"
-                            print(SPACING, "cannot be upgraded")
-                            self.logger.info("%s is the same quality as the existing file", new_file)
-                    else:
-                        upgrade_reason = "DO_NOT_MATCH"
-                        print(SPACING, "[WARN] files do not contain the same song")
-                        self.logger.warning("Tracks at %s and %s are not the same song", track_location, new_file)
-                else:
-                    can_upgrade = tracks.is_upgradable(track_location, new_file)
-                    if can_upgrade:
-                        upgrade_reason = "BETTER_QUALITY"
-                        print(SPACING, "is upgradable")
-                        self.logger.info("%s is a better quality file", new_file)
-                        row_cpy["new_file"] = str(new_file)
-                    else:
-                        upgrade_reason = "SAME_QUALITY"
-                        print(SPACING, "cannot be upgraded")
-                        self.logger.info("%s is the same quality as the existing file", new_file)
-                row_cpy["b_id"] = found["id"]
-                row_cpy["b_original_year"] = found["original_year"]
-                row_cpy["b_year"] = found["year"]
-                row_cpy["year_action"] = "itunes_year"
-        row_cpy["upgrade_reason"] = upgrade_reason
-        row_cpy["can_upgrade"] = can_upgrade
-        return row_cpy
+        return result
 
     def process_csv(self):
 
@@ -208,12 +213,19 @@ class UpgradeCheck(BaseProcess):
         for row in data:
             processed = self.process_row(row)
             if processed["can_upgrade"]:
-                self.logger.info("Track can be upgraded")
                 for_upgrade.append(processed)
             else:
-                self.logger.info("Track cannot be upgraded")
                 no_upgrade.append(processed)
         return for_upgrade, no_upgrade
+
+    def process_csv_v2(self):
+        data = read_csv(self.data_path)
+        self.logger.info("Read data file: %s", self.data_path)
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            results = sorted(pool.map(self.process_row, data), key=lambda x: (x[3], x[4], int(x[1])))
+
+        grouped = groupby(results, key=lambda x: x["can_upgrade"])
+        return results
 
     def run(self):
         # with Progress() as progress:
@@ -253,29 +265,23 @@ class CopyFiles(BaseProcess):
         """
 
         row_cpy = csv_row.copy()
-        new_file_source = csv_row["new_file"]
-        file_to_copy = Path(new_file_source)
+        file_to_copy = Path(csv_row["new_file"])
 
         original_track_path = Path(csv_row["location"])
-        print(SPACING, f"Replacing {original_track_path} with {file_to_copy}")
-        self.logger.info("Replacing %s with %s", original_track_path, file_to_copy)
+        self.logger.info("Replacing '%s' with '%s'", original_track_path, file_to_copy)
         original_parent = original_track_path.parent
         target_path = original_parent / file_to_copy.name
-        self.logger.info("Target path: %s", target_path)
+        self.logger.info("\tTarget path: %s", target_path)
         target_exists = False
         if target_path.is_dir():
-            print(SPACING, f"Expected target is: {target_path}")
-            raise ValueError("Target should not be a directory!")
+            raise ValueError("\tTarget should not be a directory!")
         if target_path.exists():
             target_exists = True
             backup_target = target_path.with_suffix(".bak")
             target_path.rename(backup_target)
-            print(SPACING, "Backing up existing file")
-            self.logger.info("Backing up previous file found at target")
-        print(SPACING, "Moving file", str(file_to_copy))
+            self.logger.info("\tBacking up previous file found at target")
         file_to_copy.rename(target_path)
-        print(SPACING, "         to", str(target_path))
-        self.logger.info("File move complete")
+        self.logger.info("\tFile move complete")
 
         row_cpy["new_file"] = str(target_path)
         row_cpy["target_existed"] = target_exists
@@ -315,8 +321,9 @@ class ConvertFiles(BaseProcess):
 
         def _convert_track():
             """Convert a FLAC file to ALAC, which stages the file to a new location."""
-            print(f"Converting... {track_title} by {track_artist} from the album {track_album}")
+            self.logger.info("Converting... '%s' by %s from the album", track_title, track_artist, track_album)
             self.service.convert_2(new_file_path)
+            self.logger.info("Conversion complete")
             parts = new_file_path.parts
             t = list(parts[parts.index("FLAC"):])
             return self.output_location.joinpath(*t).with_suffix(".m4a")
@@ -331,12 +338,12 @@ class ConvertFiles(BaseProcess):
             self.logger.info("Converting FLAC file to ALAC")
             file_to_copy = _convert_track()
             if not file_to_copy.exists():
-                print(SPACING, "Could not find converted file -", str(file_to_copy))
                 # TODO - how do we handle this from a flow perspective? Should everything halt?
                 #        At the very least, should log the error in the row. Perhaps "success"?
                 raise ValueError(f"Could not find converted file - {str(file_to_copy)}")
             else:
                 print(SPACING, "New file located at", str(file_to_copy))
+                self.logger.info("New file located at: %s", str(file_to_copy))
         else:
             # FLAC files are the only files that are converted to a different format. The others
             # should be copied from the original directory to prevent the later process from moving
@@ -349,7 +356,7 @@ class ConvertFiles(BaseProcess):
             dest_root_dir = self.output_location / file_ext.upper()
             if not dest_root_dir.exists():
                 dest_root_dir.mkdir(parents=True)
-                print(SPACING, f"Created {file_ext.upper()} Destination directory")
+                self.logger.debug("Created %s Destination directory", file_ext.upper())
 
             _parts = new_file_path.parts
             _sub_parts = list(_parts[_parts.index(file_ext.upper())+1:])
@@ -358,7 +365,6 @@ class ConvertFiles(BaseProcess):
             if not track_path.parent.exists():
                 track_path.parent.mkdir(parents=True, exist_ok=True)
                 self.logger.debug("Created album directory")
-                print(SPACING, "Created album directory")
             track_path.write_bytes(new_file_path.read_bytes())
 
             file_to_copy = track_path
@@ -381,11 +387,12 @@ class ConvertFiles(BaseProcess):
 
         current_year = csv_row["track_year"]
         if current_year != new_track_year:
-            print(
-                SPACING,
-                f"Updating year from {current_year} to {new_track_year} as per year action: {year_action}",
+            self.logger.info(
+                "Updating year value from %s to %s as per year action: %s",
+                current_year,
+                new_track_year,
+                year_action
             )
-            self.logger.info("Updating year from %s to %s", current_year, new_track_year)
             o = mutagen.File(file_to_copy, easy=True)
             # This could result in a loss of fidelity since this replaces a potential full date, e.g. 1999-01-01
             # with just a year value.
