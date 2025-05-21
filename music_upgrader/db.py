@@ -19,6 +19,11 @@ CONFIG_LOC_INDEX = -1
 def get_library(db_name):
     return Library(**DBS[db_name])
 
+def regexify(token):
+    f = REGEX_REPL.sub(".?", token)
+    s = f[0]
+    return f"[{s.upper()}{s.lower()}]{f[1:]}"
+
 
 class ApiDataService:
     def __init__(self, database_name):
@@ -29,14 +34,11 @@ class ApiDataService:
 
     def find_track(self, track_name, track_artist, track_album, use_regex=False):
         if use_regex:
-            # track_name = REGEX_REPL.sub('', track_name)
-            # track_album = REGEX_REPL.sub('', track_album)
-            # track_artist = REGEX_REPL.sub('', track_artist)
             q = AndQuery(
                 subqueries=(
-                    RegexpQuery("artist", "^{}$".format(REGEX_REPL.sub(".?", track_artist))),
-                    RegexpQuery("album", "^{}$".format(REGEX_REPL.sub(".?", track_album))),
-                    RegexpQuery("title", "^{}$".format(REGEX_REPL.sub(".?", track_name))),
+                    RegexpQuery("artist", "^{}$".format(regexify(track_artist))),
+                    RegexpQuery("album", "^{}$".format(regexify(track_album))),
+                    RegexpQuery("title", "^{}$".format(regexify(track_name))),
                 )
             )
             resp = self._execute_query(q)
