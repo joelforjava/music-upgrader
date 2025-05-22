@@ -3,7 +3,7 @@ import string
 import subprocess
 
 from beets.dbcore import AndQuery
-from beets.dbcore.query import RegexpQuery
+from beets.dbcore.query import RegexpQuery, MatchQuery, StringFieldQuery, StringQuery
 from beets.library import Item, Library
 
 from music_upgrader import settings
@@ -41,12 +41,15 @@ class ApiDataService:
                     RegexpQuery("title", "^{}$".format(regexify(track_name))),
                 )
             )
-            resp = self._execute_query(q)
         else:
-            # AndQuery()
-            resp = self._execute_query(
-                f"artist:'{track_artist}' album:'{track_album}' title:'{track_name}'"
+            q = AndQuery(
+                subqueries=(
+                    StringQuery("artist", track_artist),
+                    StringQuery("album", track_album),
+                    StringQuery("title", track_name),
+                )
             )
+        resp = self._execute_query(q)
         # if resp.rows:
         #     print("found rows")
         return resp

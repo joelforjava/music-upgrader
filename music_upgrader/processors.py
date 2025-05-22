@@ -200,7 +200,6 @@ class UpgradeCheck(BaseProcess):
                     self.logger.debug("Found match. Regex used? %s", use_regex)
                     break
         else:
-            print(SPACING, "Track not found")
             self.logger.warning("Track not found: %s by %s", track_title, track_artist)
         return result
 
