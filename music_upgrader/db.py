@@ -20,6 +20,8 @@ def get_library(db_name):
     return Library(**DBS[db_name])
 
 def regexify(token):
+    if not token:
+        return token
     f = REGEX_REPL.sub(".?", token)
     s = f[0]
     return f"[{s.upper()}{s.lower()}]{f[1:]}"
