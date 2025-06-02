@@ -1,4 +1,3 @@
-import concurrent.futures
 import csv
 import logging
 import subprocess
@@ -6,7 +5,7 @@ from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from datetime import datetime, timezone
 from itertools import groupby
 from pathlib import Path
-from typing import Final, Optional
+from typing import Final
 
 import beets.dbcore.query
 import mutagen
@@ -143,8 +142,9 @@ class UpgradeCheck(BaseProcess):
         track_artist = csv_row["track_artist"]
         track_title = csv_row["track_name"]
         track_album = csv_row["album"]
+        track_num = csv_row.get("track_number")
         self.logger.info("Processing: '%s' by %s from the album '%s'", track_title, track_artist, track_album)
-        if result := self.check_for_track(track_title, track_artist, track_album):
+        if result := self.check_for_track(track_title, track_artist, track_album, track_num):
             found = result.get()
             new_file = found["path"].decode("utf-8")
             upgrade_reason = self.determine_upgrade_status(csv_row["location"], new_file, self.should_compare_files)
@@ -183,21 +183,21 @@ class UpgradeCheck(BaseProcess):
         else:
             return _is_upgradable(current_track_location, proposed_track)
 
-    def check_for_track(self, track_title, track_artist, track_album):
+    def check_for_track(self, track_title, track_artist, track_album, track_number=None):
         """Look for the file within the selected beets library"""
         result = None
-        for use_regex in False, True:
+        for search_type in "standard", "parsed", "regex":
             try:
-                self.logger.info("Querying API. Using Regex? %s", use_regex)
+                self.logger.info("Querying API. Search Type: %s", search_type)
                 result = self.db.find_track(
-                    track_title, track_artist, track_album, use_regex=use_regex
+                    track_title, track_artist, track_album, track_number, search_type=search_type
                 )
             except beets.dbcore.query.InvalidQueryError as e:
                 self.logger.exception("Invalid query provided to beets API.")
                 continue
             else:
                 if result:
-                    self.logger.debug("Found match. Regex used? %s", use_regex)
+                    self.logger.debug("Found match. Search type: %s", search_type)
                     break
         else:
             self.logger.warning("Track not found: %s by %s", track_title, track_artist)
@@ -224,7 +224,8 @@ class UpgradeCheck(BaseProcess):
             results = sorted(pool.map(self.process_row, data), key=lambda x: (x[3], x[4], int(x[1])))
 
         grouped = groupby(results, key=lambda x: x["can_upgrade"])
-        return results
+        d = {k: list(v) for k, v in grouped}
+        return d.get(True, []), d.get(False, [])
 
     def run(self):
         # with Progress() as progress:
@@ -321,7 +322,7 @@ class ConvertFiles(BaseProcess):
         def _convert_track():
             """Convert a FLAC file to ALAC, which stages the file to a new location."""
             self.logger.info("Converting... '%s' by %s from the album", track_title, track_artist, track_album)
-            self.service.convert_2(new_file_path)
+            self.service.convert(new_file_path)
             self.logger.info("Conversion complete")
             parts = new_file_path.parts
             t = list(parts[parts.index("FLAC"):])

@@ -40,8 +40,8 @@ def load(ctx):
     click.echo("Loading latest library data...")
     sp = MODULE_PATH / ".." / "scripts" / "load_all.applescript"
     dp = Path(f"{ROOT_LOCATION}/libraryFiles.csv").expanduser()
-    l = LoadLatestLibrary(sp, dp)
-    l.run()
+    ll = LoadLatestLibrary(sp, dp)
+    ll.run()
 
 
 @cli.command(name="check-upgrade")

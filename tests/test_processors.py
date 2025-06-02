@@ -1,10 +1,10 @@
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import MagicMock, create_autospec, mock_open, patch
+from unittest.mock import create_autospec, mock_open, patch
 
 from music_upgrader import applescript as apl
-from music_upgrader.db import CMDS, CliDataService
+from music_upgrader.db import CliDataService
 from music_upgrader.processors import CopyFiles, ConvertFiles
 
 TEST_CMDS = {"test": {"exe_name": "beet", "exec": ["beet", "-c", "/tmp/beets/config.yaml"]}}
@@ -32,7 +32,7 @@ class CopyFilesTests(unittest.TestCase):
         temp_yaml = f"convert:\n  dest: {temp_dir.name}"
 
         o_file = tempfile.NamedTemporaryFile()
-        n_file = tempfile.NamedTemporaryFile()
+        # n_file = tempfile.NamedTemporaryFile()
 
         with patch.object(Path, "open", mock_open(read_data=temp_yaml)):
             mock_svc = create_autospec(CliDataService)

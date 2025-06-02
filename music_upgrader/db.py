@@ -1,10 +1,11 @@
 import re
 import string
 import subprocess
+from typing import Union
 
 from beets.dbcore import AndQuery
-from beets.dbcore.query import RegexpQuery, MatchQuery, StringFieldQuery, StringQuery
-from beets.library import Item, Library
+from beets.dbcore.query import RegexpQuery, StringQuery
+from beets.library import Library
 
 from music_upgrader import settings
 
@@ -34,23 +35,43 @@ class ApiDataService:
     def _execute_query(self, query):
         return self.library.items(query)
 
-    def find_track(self, track_name, track_artist, track_album, use_regex=False):
-        if use_regex:
-            q = AndQuery(
-                subqueries=(
+    def find_track(self, track_name, track_artist, track_album, track_num=None, search_type=None):
+        match search_type:
+            case "regex":
+                q = AndQuery(
+                    subqueries=(
+                        RegexpQuery("artist", "^{}$".format(regexify(track_artist))),
+                        RegexpQuery("album", "^{}$".format(regexify(track_album))),
+                        RegexpQuery("title", "^{}$".format(regexify(track_name))),
+                    )
+                )
+            case "parsed":
+                if track_name.endswith("]") or track_name.endswith(")"):
+                    start_idx = track_name.find("[")
+                    track_name = track_name[:start_idx-1]
+                sub_q: list[Union[RegexpQuery, StringQuery]] = [
                     RegexpQuery("artist", "^{}$".format(regexify(track_artist))),
                     RegexpQuery("album", "^{}$".format(regexify(track_album))),
                     RegexpQuery("title", "^{}$".format(regexify(track_name))),
+                ]
+                if track_num:
+                    sub_q.append(StringQuery("track", track_num))
+                q = AndQuery(
+                    subqueries=(
+                        RegexpQuery("artist", "^{}$".format(regexify(track_artist))),
+                        RegexpQuery("album", "^{}$".format(regexify(track_album))),
+                        RegexpQuery("title", "^{}$".format(regexify(track_name))),
+                    )
                 )
-            )
-        else:
-            q = AndQuery(
-                subqueries=(
-                    StringQuery("artist", track_artist),
-                    StringQuery("album", track_album),
-                    StringQuery("title", track_name),
+            case _:
+                q = AndQuery(
+                    subqueries=(
+                        StringQuery("artist", track_artist),
+                        StringQuery("album", track_album),
+                        StringQuery("title", track_name),
+                    )
                 )
-            )
+
         resp = self._execute_query(q)
         # if resp.rows:
         #     print("found rows")
@@ -106,15 +127,14 @@ class CliDataService:
     def _execute_convert(self, query):
         return self._execute_query("convert", ["-y"] + query)
 
-    def find_track(self, track_name, track_artist, track_album, use_regex=False):
+    def find_track(self, track_name, track_artist, track_album, track_num=None, search_type=None):
+        use_regex = search_type == "regex"
         if use_regex:
-            resp = self._execute_get(
-                [
-                    f"artist::^{track_artist}$",
-                    f"album::^{track_album}$",
-                    f"title::^{track_name}$",
-                ]
-            )
+            query_params = [
+                f"artist::^{track_artist}$",
+                f"album::^{track_album}$",
+                f"title::^{track_name}$",
+            ]
         else:
             # NOTE: These commented-out versions were from prior to how query is handled in _execute_query.
             #       It now expects a list
@@ -122,36 +142,17 @@ class CliDataService:
             # resp = self._execute_query(f"artist:{track_artist}")  # NOTE: THIS works. Note no inner quotes around the query
             # resp = self._execute_query(f"artist:{track_artist} album:{track_album} title:{track_name}")
             # By default, the CLI returns results as "<ARTIST_NAME> - <ALBUM_NAME> - <TRACK_NAME>
-            resp = self._execute_get(
-                [
-                    f"artist:{track_artist}",
-                    f"album:{track_album}",
-                    f"title:{track_name}",
-                ]
-            )
-        # if resp:
-        #     print("found rows")
-        return resp.splitlines()
-
-    def convert(self, track_name, track_artist, track_album, use_regex=True):
-        if use_regex:
-            req_arr = [
-                f"artist::^{REGEX_REPL.sub('.?', track_artist)}$",
-                f"album::^{REGEX_REPL.sub('.?', track_album)}$",
-                f"title::^{REGEX_REPL.sub('.?', track_name)}$",
-            ]
-        else:
-            req_arr = [
+            query_params = [
                 f"artist:{track_artist}",
                 f"album:{track_album}",
                 f"title:{track_name}",
             ]
-        resp = self._execute_convert(req_arr)
+        resp = self._execute_get(query_params)
         # if resp:
         #     print("found rows")
         return resp.splitlines()
 
-    def convert_2(self, current_beet_path):
+    def convert(self, current_beet_path):
         resp = self._execute_convert([f"path:{current_beet_path}"])
         return resp.splitlines()
 
@@ -166,7 +167,7 @@ if __name__ == "__main__":
 
         # trk_res = db.find_track("Lake of Fire", "Meat Puppets", "No Strings Attached")
         trk_res = db.find_track(
-            "Hey, That's Right!", "Powerman 5000", "Transform", use_regex=True
+            "Hey, That's Right!", "Powerman 5000", "Transform", search_type="regex"
         )
 
         if trk_res:
