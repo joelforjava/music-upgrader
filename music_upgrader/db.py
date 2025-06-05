@@ -46,22 +46,24 @@ class ApiDataService:
                     )
                 )
             case "parsed":
-                if track_name.endswith("]") or track_name.endswith(")"):
+                if track_name.endswith("]"):
                     start_idx = track_name.find("[")
                     track_name = track_name[:start_idx-1]
+                elif track_name.endswith(")"):
+                    start_idx = track_name.find("(")
+                    track_name = track_name[:start_idx-1]
+                else:
+                    # No need to execute since we only come here after "standard" search fails
+                    return None
                 sub_q: list[Union[RegexpQuery, StringQuery]] = [
                     RegexpQuery("artist", "^{}$".format(regexify(track_artist))),
-                    RegexpQuery("album", "^{}$".format(regexify(track_album))),
-                    RegexpQuery("title", "^{}$".format(regexify(track_name))),
+                    RegexpQuery("album", "^{}".format(regexify(track_album))),
+                    RegexpQuery("title", "^{}".format(regexify(track_name))),
                 ]
                 if track_num:
                     sub_q.append(StringQuery("track", track_num))
                 q = AndQuery(
-                    subqueries=(
-                        RegexpQuery("artist", "^{}$".format(regexify(track_artist))),
-                        RegexpQuery("album", "^{}$".format(regexify(track_album))),
-                        RegexpQuery("title", "^{}$".format(regexify(track_name))),
-                    )
+                    subqueries=sub_q
                 )
             case _:
                 q = AndQuery(
