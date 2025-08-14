@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from pathlib import Path
 
 import click
@@ -58,7 +59,10 @@ def check(ctx, _file):
     db_name = ctx.obj["DB_NAME"]
     p = Path(f"{ROOT_LOCATION}/{_file}").expanduser()
     u = UpgradeCheck(p, ApiDataService(db_name))
+    start_time = datetime.now(tz=timezone.utc)
     u.run()
+    end_time = datetime.now(tz=timezone.utc)
+    click.echo(f"Completed in {end_time - start_time}")
 
 
 @cli.command(name="copy-files")
