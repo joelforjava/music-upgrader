@@ -7,7 +7,7 @@ from beets.dbcore import AndQuery
 from beets.dbcore.query import RegexpQuery, StringQuery
 from beets.library import Library
 
-from music_upgrader import settings
+from music_upgrader import parsers, settings
 
 # ‐
 REGEX_REPL = re.compile("[%s]" % re.escape(string.punctuation))
@@ -24,8 +24,54 @@ def regexify(token):
     if not token:
         return token
     f = REGEX_REPL.sub(".?", token)
-    s = f[0]
-    return f"[{s.upper()}{s.lower()}]{f[1:]}"
+    tokens = []
+    for tt in f.split():
+        s = tt[0]
+        if s.isalpha():
+            tokens.append(f"[{s.upper()}{s.lower()}]{tt[1:]}")
+        else:
+            tokens.append(tt)
+    return " ".join(tokens)
+
+
+def build_query_for_search_type(track_name, track_artist, track_album, track_num=None, search_type=None, with_parser=None):
+    if not with_parser:
+        with_parser = parsers.get_default()
+
+    match search_type:
+        case "regex":
+            sub_q = [
+                RegexpQuery("artist", "^{}$".format(regexify(track_artist))),
+                RegexpQuery("album", "^{}$".format(regexify(track_album))),
+                RegexpQuery("title", "^{}$".format(regexify(track_name))),
+            ]
+            if track_num:
+                sub_q.append(StringQuery("track", track_num))
+        case "parsed":
+            parsed_track_name = with_parser(track_name)
+            # Remove the extras, e.g (Special Edition) since the Beets dbs tend to not have this info
+            parsed_album_name = parsers.remove_bracketed_strings_from_end(track_album)
+            # if parsed_track_name == track_name:
+            #     return None
+
+            sub_q: list[Union[RegexpQuery, StringQuery]] = [
+                RegexpQuery("artist", "^{}$".format(regexify(track_artist))),
+                RegexpQuery("album", "^{}".format(regexify(parsed_album_name))),
+                RegexpQuery("title", "^{}".format(regexify(parsed_track_name))),
+            ]
+            if track_num:
+                sub_q.append(StringQuery("track", track_num))
+        case _:
+            sub_q = [
+                StringQuery("artist", track_artist),
+                StringQuery("album", track_album),
+                StringQuery("title", track_name),
+            ]
+            if track_num:
+                sub_q.append(StringQuery("track", track_num))
+    return AndQuery(
+        subqueries=sub_q
+    )
 
 
 class ApiDataService:
@@ -36,43 +82,7 @@ class ApiDataService:
         return self.library.items(query)
 
     def find_track(self, track_name, track_artist, track_album, track_num=None, search_type=None):
-        match search_type:
-            case "regex":
-                q = AndQuery(
-                    subqueries=(
-                        RegexpQuery("artist", "^{}$".format(regexify(track_artist))),
-                        RegexpQuery("album", "^{}$".format(regexify(track_album))),
-                        RegexpQuery("title", "^{}$".format(regexify(track_name))),
-                    )
-                )
-            case "parsed":
-                if track_name.endswith("]"):
-                    start_idx = track_name.find("[")
-                    track_name = track_name[:start_idx-1]
-                elif track_name.endswith(")"):
-                    start_idx = track_name.find("(")
-                    track_name = track_name[:start_idx-1]
-                else:
-                    # No need to execute since we only come here after "standard" search fails
-                    return None
-                sub_q: list[Union[RegexpQuery, StringQuery]] = [
-                    RegexpQuery("artist", "^{}$".format(regexify(track_artist))),
-                    RegexpQuery("album", "^{}".format(regexify(track_album))),
-                    RegexpQuery("title", "^{}".format(regexify(track_name))),
-                ]
-                if track_num:
-                    sub_q.append(StringQuery("track", track_num))
-                q = AndQuery(
-                    subqueries=sub_q
-                )
-            case _:
-                q = AndQuery(
-                    subqueries=(
-                        StringQuery("artist", track_artist),
-                        StringQuery("album", track_album),
-                        StringQuery("title", track_name),
-                    )
-                )
+        q = build_query_for_search_type(track_name, track_artist, track_album, track_num, search_type)
 
         resp = self._execute_query(q)
         # if resp.rows:

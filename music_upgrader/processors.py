@@ -57,8 +57,7 @@ def write_csv(data, file_path: Path):
 
 
 class LoadLatestLibrary:
-    def __init__(self, script_path: Path, data_path: Path):
-        self.script_path = script_path
+    def __init__(self, data_path: Path):
         self.data_path = data_path
 
     def run(self):
@@ -186,7 +185,7 @@ class UpgradeCheck(BaseProcess):
     def check_for_track(self, track_title, track_artist, track_album, track_number=None):
         """Look for the file within the selected beets library"""
         result = None
-        for search_type in "standard", "parsed", "regex":
+        for search_type in "parsed",:
             try:
                 self.logger.info("Querying API. Search Type: %s", search_type)
                 result = self.db.find_track(
