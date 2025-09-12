@@ -13,6 +13,7 @@ from .processors import (
     LoadLatestLibrary,
     UpgradeCheck,
 )
+from .settings import DEFAULT_LIBRARY
 
 # from . import __version__
 
@@ -27,7 +28,7 @@ CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
     "--database",
     help="The database to use for upgrade checks",
     type=click.Choice(CMDS.keys()),
-    default="physical",
+    default=DEFAULT_LIBRARY,
 )
 @click.pass_context
 def cli(ctx, database):

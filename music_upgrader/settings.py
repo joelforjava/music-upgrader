@@ -30,6 +30,8 @@ LOG = logging.getLogger(__name__)
 
 EXPECTED_KEYS = ["path", "directory", "path_formats"]
 
+DEFAULT_LIBRARY = config.get("library", "default")
+
 
 def load():
     dbs = {}
