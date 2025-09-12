@@ -5,6 +5,7 @@ logging_config_root_dir=/Users/me/work/music-upgrader
 logging_config_loc=%(logging_config_root_dir)s/logging.json
 
 [library]
+default=main
 names=main,test
 
 [library.main]
