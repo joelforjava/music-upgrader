@@ -142,11 +142,17 @@ class UpgradeCheck(BaseProcess):
         track_title = csv_row["track_name"]
         track_album = csv_row["album"]
         track_num = csv_row.get("track_number")
+        track_file = csv_row["location"]
         self.logger.info("Processing: '%s' by %s from the album '%s'", track_title, track_artist, track_album)
-        if result := self.check_for_track(track_title, track_artist, track_album, track_num):
+
+        file_ext = track_file.split(".")[-1]
+        if file_ext in ("pdf", "m4v"):
+            upgrade_reason = "NOT_AUDIO"
+            can_upgrade = False
+        elif result := self.check_for_track(track_title, track_artist, track_album, track_num):
             found = result.get()
             new_file = found["path"].decode("utf-8")
-            upgrade_reason = self.determine_upgrade_status(csv_row["location"], new_file, self.should_compare_files)
+            upgrade_reason = self.determine_upgrade_status(track_file, new_file, self.should_compare_files)
             can_upgrade = upgrade_reason in ["BETTER_QUALITY"]
             if can_upgrade:
                 self.logger.info("\tthis track will be upgraded due to: %s", upgrade_reason)
