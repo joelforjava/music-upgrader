@@ -1,5 +1,6 @@
 import csv
 import logging
+import shutil
 import subprocess
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from datetime import datetime, timezone
@@ -285,7 +286,8 @@ class CopyFiles(BaseProcess):
             backup_target = target_path.with_suffix(".bak")
             target_path.rename(backup_target)
             self.logger.info("\tBacking up previous file found at target")
-        file_to_copy.rename(target_path)
+        shutil.move(file_to_copy, target_path)
+        # file_to_copy.rename(target_path)
         self.logger.info("\tFile move complete")
 
         row_cpy["new_file"] = str(target_path)
@@ -326,14 +328,14 @@ class ConvertFiles(BaseProcess):
 
         def _convert_track():
             """Convert a FLAC file to ALAC, which stages the file to a new location."""
-            self.logger.info("Converting... '%s' by %s from the album", track_title, track_artist, track_album)
+            self.logger.info("Converting... '%s' by %s from the album %s", track_title, track_artist, track_album)
             self.service.convert(new_file_path)
             self.logger.info("Conversion complete")
             parts = new_file_path.parts
             t = list(parts[parts.index("FLAC"):])
             return self.output_location.joinpath(*t).with_suffix(".m4a")
 
-        self.logger.info("Processing %s by %s from the album %s", track_title, track_artist, track_album)
+        self.logger.info("Processing '%s' by %s from the album %s", track_title, track_artist, track_album)
         row_cpy = csv_row.copy()
         new_file_source = csv_row["new_file"]
         new_file_path: Final[Path] = Path(new_file_source)
@@ -390,7 +392,11 @@ class ConvertFiles(BaseProcess):
             case _:
                 new_track_year = csv_row["track_year"]
 
-        current_year = csv_row["track_year"]
+        # You need to check the actual file to see what the current value is!
+        # current_year = csv_row["track_year"]
+        o = mutagen.File(file_to_copy, easy=True)
+        current_date = o["date"][0]
+        current_year = current_date.split("-")[0]
         if current_year != new_track_year:
             self.logger.info(
                 "Updating year value from %s to %s as per year action: %s",
@@ -398,10 +404,9 @@ class ConvertFiles(BaseProcess):
                 new_track_year,
                 year_action
             )
-            o = mutagen.File(file_to_copy, easy=True)
             # This could result in a loss of fidelity since this replaces a potential full date, e.g. 1999-01-01
             # with just a year value.
-            o["date"] = new_track_year
+            o["date"] = [str(new_track_year)]
             o.save()
 
         row_cpy["new_file"] = str(file_to_copy)

@@ -41,7 +41,7 @@ def build_query_for_search_type(track_name, track_artist, track_album, track_num
     match search_type:
         case "regex":
             sub_q = [
-                RegexpQuery("artist", "^{}$".format(regexify(track_artist))),
+                # RegexpQuery("artist", "^{}$".format(regexify(track_artist))),
                 RegexpQuery("album", "^{}$".format(regexify(track_album))),
                 RegexpQuery("title", "^{}$".format(regexify(track_name))),
             ]
@@ -55,7 +55,7 @@ def build_query_for_search_type(track_name, track_artist, track_album, track_num
             #     return None
 
             sub_q: list[Union[RegexpQuery, StringQuery]] = [
-                RegexpQuery("artist", "^{}$".format(regexify(track_artist))),
+                # RegexpQuery("artist", "^{}$".format(regexify(track_artist))),
                 RegexpQuery("album", "^{}".format(regexify(parsed_album_name))),
                 RegexpQuery("title", "^{}".format(regexify(parsed_track_name))),
             ]
@@ -63,7 +63,7 @@ def build_query_for_search_type(track_name, track_artist, track_album, track_num
                 sub_q.append(StringQuery("track", track_num))
         case _:
             sub_q = [
-                StringQuery("artist", track_artist),
+                # StringQuery("artist", track_artist),
                 StringQuery("album", track_album),
                 StringQuery("title", track_name),
             ]
