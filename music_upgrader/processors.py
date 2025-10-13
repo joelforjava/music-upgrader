@@ -10,9 +10,10 @@ from typing import Final
 
 import beets.dbcore.query
 import mutagen
+import rich.progress
 import yaml
 from dateutil.parser import ParserError, parse
-from rich.progress import Progress
+from rich.progress import Progress, track
 
 from . import applescript as apl
 from . import tracks
@@ -38,7 +39,7 @@ def read_csv(file_path: Path):
         print("FILE NOT FOUND")
         return data
 
-    with file_path.open("r") as csv_file:
+    with rich.progress.open(file_path, "r") as csv_file:
         reader = csv.DictReader(csv_file)
         for row in reader:
             if "last_played" in row:
@@ -106,7 +107,7 @@ class BaseProcess:
         data = read_csv(self.data_path)
         self.logger.info("Read data file: %s", self.data_path)
         results = []
-        for row in data:
+        for row in track(data):
             processed = self.process_row(row)
             results.append(processed)
         return results
@@ -215,7 +216,7 @@ class UpgradeCheck(BaseProcess):
 
         for_upgrade = []
         no_upgrade = []
-        for row in data:
+        for row in track(data, description="Checking..."):
             processed = self.process_row(row)
             if processed["can_upgrade"]:
                 for_upgrade.append(processed)
@@ -229,6 +230,7 @@ class UpgradeCheck(BaseProcess):
         with ThreadPoolExecutor(max_workers=8) as pool:
             results = sorted(pool.map(self.process_row, data), key=lambda x: (x[3], x[4], int(x[1])))
 
+        # TODO - would need to re-sort based on the key. Might make more sense to use upgrade_reason
         grouped = groupby(results, key=lambda x: x["can_upgrade"])
         d = {k: list(v) for k, v in grouped}
         return d.get(True, []), d.get(False, [])
@@ -381,7 +383,7 @@ class ConvertFiles(BaseProcess):
 
         # Choices are: nothing, b_original_year, b_year, itunes_year
         year_action = csv_row.get("year_action", "nothing")
-        self.logger.info("Updating year using %s action", year_action)
+        self.logger.debug("Updating year using %s action", year_action)
         match year_action.lower():
             case "b_original_year":
                 new_track_year = csv_row["b_original_year"]
