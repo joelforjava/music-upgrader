@@ -41,8 +41,11 @@ def cli(ctx, database):
 def load(ctx):
     click.echo("Loading latest library data...")
     dp = Path(f"{ROOT_LOCATION}/libraryFiles.csv").expanduser()
+    start_time = datetime.now(tz=timezone.utc)
     ll = LoadLatestLibrary(dp)
     ll.run()
+    end_time = datetime.now(tz=timezone.utc)
+    click.echo(f"Completed in {end_time - start_time}")
 
 
 @cli.command(name="check-upgrade")
