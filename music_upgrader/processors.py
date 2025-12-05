@@ -33,6 +33,11 @@ SPACING = " " * len("Checking...")
 
 CSV_HEADER = ("persistent_id", "track_number", "track_name", "track_artist", "album", "album_artist", "track_year", "last_played", "play_count", "location")
 
+FILE_EXT_TO_TYPE = {
+    "M4A": "ALAC",
+    "MP3": "MP3",
+}
+
 def read_csv(file_path: Path):
     data = []
     if not file_path.exists():
@@ -240,11 +245,12 @@ class UpgradeCheck(BaseProcess):
         #     pass
         processed, no_upgrade = self.process_csv()
         now = datetime.now(timezone.utc)
-        out_location = Path(
-            f"{ROOT_LOCATION}/upgrade_checks_{now.strftime(DATE_FORMAT_FOR_FILES)}.csv"
-        ).expanduser()
-        write_csv(processed, out_location)
-        self.logger.info("Saving: %s", out_location)
+        if processed:
+            out_location = Path(
+                f"{ROOT_LOCATION}/upgrade_checks_{now.strftime(DATE_FORMAT_FOR_FILES)}.csv"
+            ).expanduser()
+            write_csv(processed, out_location)
+            self.logger.info("Saving: %s", out_location)
         noup_location = Path(
             f"{ROOT_LOCATION}/no_upgrade_{now.strftime(DATE_FORMAT_FOR_FILES)}.csv"
         ).expanduser()
@@ -274,6 +280,8 @@ class CopyFiles(BaseProcess):
 
         row_cpy = csv_row.copy()
         file_to_copy = Path(csv_row["new_file"])
+        if file_to_copy.suffix == ".flac":
+            raise ValueError("Unexpected file type. Files must be either .alac or .mp3")
 
         original_track_path = Path(csv_row["location"])
         self.logger.info("Replacing '%s' with '%s'", original_track_path, file_to_copy)
@@ -368,7 +376,9 @@ class ConvertFiles(BaseProcess):
                 self.logger.debug("Created %s Destination directory", file_ext.upper())
 
             _parts = new_file_path.parts
-            _sub_parts = list(_parts[_parts.index(file_ext.upper())+1:])
+            _sub_parts = list(
+                _parts[_parts.index(FILE_EXT_TO_TYPE.setdefault(file_ext.upper(), file_ext.upper()))+1:]
+            )
             track_path = dest_root_dir.joinpath(*_sub_parts)
 
             if not track_path.parent.exists():
