@@ -32,6 +32,7 @@ EXPECTED_KEYS = ["path", "directory", "path_formats"]
 
 DEFAULT_LIBRARY = config.get("library", "default")
 
+SKIP_APPLE_FILES = config.getboolean("DEFAULT", "treat_apple_files_as_max", fallback=True)
 
 def load():
     dbs = {}

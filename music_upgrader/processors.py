@@ -4,6 +4,7 @@ import shutil
 import subprocess
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from datetime import datetime, timezone
+from enum import StrEnum, auto
 from itertools import groupby
 from pathlib import Path
 from typing import Final
@@ -18,6 +19,7 @@ from rich.progress import Progress, track
 from . import applescript as apl
 from . import tracks
 from .db import ApiDataService, CliDataService
+from .settings import SKIP_APPLE_FILES
 
 ROOT_LOCATION = "~/Code/Data/Music/Upgrader"
 """Root location of the data files used for processing"""
@@ -37,6 +39,15 @@ FILE_EXT_TO_TYPE = {
     "M4A": "ALAC",
     "MP3": "MP3",
 }
+
+class UpgradeReasons(StrEnum):
+    MAX_QUALITY = "MAX_QUALITY"
+    NOT_AUDIO = "NOT_AUDIO"
+    BETTER_QUALITY = "BETTER_QUALITY"
+    SAME_QUALITY = "SAME_QUALITY"
+    DO_NOT_MATCH = "DO_NOT_MATCH"
+    NOT_FOUND = "NOT_FOUND"
+
 
 def read_csv(file_path: Path):
     data = []
@@ -154,13 +165,24 @@ class UpgradeCheck(BaseProcess):
 
         file_ext = track_file.split(".")[-1]
         if file_ext in ("pdf", "m4v"):
-            upgrade_reason = "NOT_AUDIO"
+            upgrade_reason = UpgradeReasons.NOT_AUDIO
             can_upgrade = False
+        elif file_ext in ("m4a",) and SKIP_APPLE_FILES:
+            # For purposes of this upgrade, treat all m4a files as "MAX" regardless of whether they're ALAC.
+            upgrade_reason = UpgradeReasons.MAX_QUALITY
+            can_upgrade = False
+            self.logger.info("\tthis track will not be upgraded since it uses an Apple format and you have enabled `treat_apple_files_as_max`")
         elif result := self.check_for_track(track_title, track_artist, track_album, track_num):
-            found = result.get()
-            new_file = found["path"].decode("utf-8")
-            upgrade_reason = self.determine_upgrade_status(track_file, new_file, self.should_compare_files)
-            can_upgrade = upgrade_reason in ["BETTER_QUALITY"]
+            # TODO - determine if more than one result was returned and use the "best" option
+            for found in iter(result):
+                new_file = found["path"].decode("utf-8")
+                upgrade_reason = self.determine_upgrade_status(track_file, new_file, self.should_compare_files)
+                can_upgrade = upgrade_reason in [UpgradeReasons.BETTER_QUALITY]
+                if can_upgrade:
+                    break
+            else:
+                can_upgrade = False
+
             if can_upgrade:
                 self.logger.info("\tthis track will be upgraded due to: %s", upgrade_reason)
                 row_cpy["new_file"] = new_file
@@ -171,7 +193,7 @@ class UpgradeCheck(BaseProcess):
             else:
                 self.logger.info("\tthis track will not be upgraded. Reason: %s", upgrade_reason)
         else:
-            upgrade_reason = "NOT_FOUND"
+            upgrade_reason = UpgradeReasons.NOT_FOUND
             can_upgrade = False
             self.logger.info("\tthis track was not found in the database")
         row_cpy["upgrade_reason"] = upgrade_reason
@@ -183,22 +205,22 @@ class UpgradeCheck(BaseProcess):
 
         def _is_upgradable(_curr, _new):
             if tracks.is_upgradable(_curr, _new):
-                return "BETTER_QUALITY"
+                return UpgradeReasons.BETTER_QUALITY
             else:
-                return "SAME_QUALITY"
+                return UpgradeReasons.SAME_QUALITY
 
         if should_compare_file_tags:
             if tracks.is_same_track(current_track_location, proposed_track):
                 return _is_upgradable(current_track_location, proposed_track)
             else:
-                return "DO_NOT_MATCH"
+                return UpgradeReasons.DO_NOT_MATCH
         else:
             return _is_upgradable(current_track_location, proposed_track)
 
     def check_for_track(self, track_title, track_artist, track_album, track_number=None):
         """Look for the file within the selected beets library"""
         result = None
-        for search_type in "parsed",:
+        for search_type in "parsed","regex":
             try:
                 self.logger.info("Querying API. Search Type: %s", search_type)
                 result = self.db.find_track(
@@ -230,11 +252,7 @@ class UpgradeCheck(BaseProcess):
         return for_upgrade, no_upgrade
 
     def process_csv_v2(self):
-        data = read_csv(self.data_path)
-        self.logger.info("Read data file: %s", self.data_path)
-        with ThreadPoolExecutor(max_workers=8) as pool:
-            results = sorted(pool.map(self.process_row, data), key=lambda x: (x[3], x[4], int(x[1])))
-
+        results = super().process_csv_v2()
         # TODO - would need to re-sort based on the key. Might make more sense to use upgrade_reason
         grouped = groupby(results, key=lambda x: x["can_upgrade"])
         d = {k: list(v) for k, v in grouped}
