@@ -170,6 +170,7 @@ class CliDataService:
 
 
 if __name__ == "__main__":
+    # These tests are highly dependent on a local database, but should give a good idea of how to use this module
     test_db_service = False
     if test_db_service:
         db = ApiDataService("physical")
